@@ -1,0 +1,7 @@
+image_file = "/home/snyp/gits/learnogl/test/textures/particle.png"
+
+vert_shader = "/home/snyp/gits/learnogl/test/instance_test/vs.vert"
+frag_shader = "/home/snyp/gits/learnogl/test/instance_test/fs.frag"
+
+num_particles = 300
+emitter_position = [0.0, 0.0, -2.0]

@@ -1,0 +1,32 @@
+#include <learnogl/fixed_string_buffer.h>
+#include <loguru.hpp>
+#include <scaffold/const_log.h>
+
+FixedStringBuffer::Index FixedStringBuffer::add(const char *s, u32 length) {
+    if (length == 0) {
+        length = (u32)strlen(s);
+    }
+
+    u32 bytes_before_adding = fo::size(_concat_of_strings);
+
+    fo::resize(_concat_of_strings, length + 1);
+
+    memcpy(fo::data(_concat_of_strings) + bytes_before_adding, s, length);
+    _concat_of_strings[fo::size(_concat_of_strings) - 1] = char(0);
+
+    fo::push_back(_start_and_length, StartAndLength{ bytes_before_adding, length });
+
+    return Index{ fo::size(_start_and_length) - 1 };
+}
+
+const char *FixedStringBuffer::get(Index index) const {
+    DCHECK_LT_F(index._i, fo::size(_start_and_length));
+    auto sl = _start_and_length[index._i];
+    return fo::data(_concat_of_strings) + sl.start_byte;
+}
+
+u32 FixedStringBuffer::length(Index index) const {
+    DCHECK_LT_F(index._i, fo::size(_start_and_length));
+    auto sl = _start_and_length[index._i];
+    return sl.length;
+}

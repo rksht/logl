@@ -1,0 +1,7 @@
+*.sublime-project
+*.sublime-workspace
+tmp/
+CMakeLists.txt.user
+.vscode/
+compile_commands.json
+captures

@@ -1,0 +1,50 @@
+// Describing a cube grid. Position is wrt cube scale
+
+cubes_per_side = 4
+
+cube_scale = 2.0 
+
+cubes = [
+
+	{color = "#964CBD", alpha = 120, position = [0, 0, 0]},
+
+	{color = "#FD1616", alpha = 200, position = [1, 3, 2]},
+
+	{color = "#6D4591", alpha = 255, position = [3, 2, 0]},
+
+	{color = "#D12BA8", alpha = 50, position = [2, 1, 1]},
+
+	{color = "#EDEEF6", alpha = 100, position = [0, 3, 2]},
+
+	{color = "#BB4669", alpha = 120, position = [3, 3, 3]},
+
+	// {color = "#B5FDC0", alpha = 180, position = [2, 2, 2]},
+
+	{color = "#82A7DE", alpha = 255, position = [3, 1, 1]},
+
+	{color = "#82A7DE", alpha = 40, position = [3, 2, 3]},
+
+	{color = "#82A7DE", alpha = 190, position = [3, 1, 3]},
+
+	{color = "#82A7DE", alpha = 230, position = [0, 2, 1]},
+
+	{color = "#82A7DE", alpha = 200, position = [2, 0, 2]},
+
+
+	{color = "#FF002B", alpha = 20, position = [2, 2, 2]},
+
+	{color = "#82A7DE", alpha = 20, position = [2, 2, 1]},
+
+	{color = "#6DFF00", alpha = 20, position = [2, 2, 0]},
+
+	{color = "#82A7DE", alpha = 150, position = [1, 2, 2]},
+
+	{color = "#82A7DE", alpha = 140, position = [3, 2, 2]},
+
+	{color = "#82A7DE", alpha = 100, position = [2, 0, 3]},
+
+	{color = "#82A7DE", alpha = 200, position = [2, 1, 2]},
+
+
+
+]

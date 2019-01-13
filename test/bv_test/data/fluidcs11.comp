@@ -1,0 +1,338 @@
+#version 430 core
+
+#include <common_defs.inc.glsl>
+
+#include "simulation_constants.inc.glsl"
+
+/* __macro__
+
+				PARTICLES_RO_BINDPOINT = int
+				PARTICLES_RW_BINDPOINT = int
+				FORCES_BINDPOINT = int
+				DENSITIES_BINDPOINT = int
+				SIM_CONSTANTS_UBO_BINDPOINT = int
+
+*/
+
+// std430 layout has vec2's aligned to 2x floats so it's same as the C++ side.
+
+struct Particle {
+	vec2 position;
+	vec2 velocity;
+};
+
+struct ParticleForce {
+	vec2 acceleration;
+};
+
+struct ParticleDensity {
+	float density;
+};
+
+#define SIMULATION_BLOCK_SIZE 256
+
+float calculate_density(float r_diff_sq)
+{
+	float h_sq = u_smooth_len * u_smooth_len;
+	// The weight formula used for density is
+	// W_poly6(r, h) = 315 / (64 * pi * h^9) * (h^2 - r^2)^3
+	const float diff = h_sq - r_diff_sq;
+	return u_density_coeff * diff * diff * diff;
+}
+
+#if defined(DENSITY_SIMPLE_KERNEL)
+
+BUFFER_BINDPOINT(PARTICLES_RO_BINDPOINT, std430) buffer ParticlesRO { Particle particles_ro[]; };
+
+BUFFER_BINDPOINT(DENSITIES_BINDPOINT, std430) buffer ParticlesDensityRW
+{
+	ParticleDensity particles_density_rw[];
+};
+
+NUMTHREADS_LAYOUT(SIMULATION_BLOCK_SIZE, 1, 1)
+void main()
+{
+	const uint P_ID = DTID.x;
+
+	const float h_sq = u_smooth_len * u_smooth_len;
+	vec2 P_position = particles_ro[P_ID].position;
+
+	float density = 0.0;
+
+	// Run the summation through every particle in the simulation
+	for (uint i = 0; i < u_num_particles; ++i) {
+		vec2 N_position = particles_ro[i].position;
+
+		vec2 r_diff = N_position - P_position;
+		float r_diff_sq = dot(r_diff, r_diff);
+
+		if (r_diff_sq < h_sq) {
+			density += calculate_density(r_diff_sq);
+		}
+	}
+
+	particles_density_rw[P_ID].density = density > 0.002 ? density : 0.002;
+}
+
+#endif
+
+float calculate_pressure(float density)
+{
+	return u_pressure_stiffness * max(pow(density / u_rest_density, 3) - 1, 0);
+}
+
+vec2 calculate_grad_pressure(float r, float P_pressure, float N_pressure, float N_density, vec2 diff)
+{
+	const float h = u_smooth_len;
+	float avg_pressure = 0.5 * (N_pressure + P_pressure);
+	return u_grad_pressure_coef * avg_pressure / N_density * (h - r) * (h - r) / r * (diff);
+}
+
+vec2 calculate_lap_velocity(float r, vec2 P_velocity, vec2 N_velocity, float N_density)
+{
+	const float h = u_smooth_len;
+	vec2 vel_diff = N_velocity - P_velocity;
+	return u_lap_viscosity_coef / N_density * (h - r) * vel_diff;
+}
+
+#if defined(FORCE_SIMPLE_KERNEL)
+
+BUFFER_BINDPOINT(PARTICLES_RO_BINDPOINT, std430) buffer ParticlesRO { Particle particles_ro[]; };
+
+BUFFER_BINDPOINT(DENSITIES_BINDPOINT, std430) readonly buffer ParticlesDensityRO
+{
+	ParticleDensity particles_density_ro[];
+};
+
+BUFFER_BINDPOINT(FORCES_BINDPOINT, std430) buffer ParticleForcesRW { ParticleForce particle_forces_rw[]; };
+
+NUMTHREADS_LAYOUT(SIMULATION_BLOCK_SIZE, 1, 1)
+void main()
+{
+	const uint P_id = DTID.x;
+	vec2 P_position = particles_ro[P_id].position;
+	vec2 P_velocity = particles_ro[P_id].velocity;
+	float P_density = particles_density_ro[P_id].density;
+	float P_pressure = calculate_pressure(P_density);
+
+	const float h_sq = u_smooth_len * u_smooth_len;
+
+	vec2 acceleration = vec2(0.0, 0.0);
+
+	for (uint N_id = 0; N_id < u_num_particles; ++N_id) {
+		vec2 N_position = particles_ro[N_id].position;
+		vec2 diff = N_position - P_position;
+		float r_sq = dot(diff, diff);
+
+		if (r_sq < h_sq && P_id != N_id) {
+			vec2 N_velocity = particles_ro[N_id].velocity;
+			float N_density = particles_density_ro[N_id].density;
+			float N_pressure = calculate_pressure(N_density);
+			float r = sqrt(r_sq);
+
+			// Pressure term
+			acceleration += calculate_grad_pressure(r, P_pressure, N_pressure, N_density, diff);
+
+			// Viscosity term
+			acceleration += calculate_lap_velocity(r, P_velocity, N_velocity, N_density);
+
+			// const float k = 40.0;
+			//
+			// const vec2 diff = P_position - vec2(0.8, 0.6);
+			// const vec2 rotated = vec2(-diff.y, diff.x);
+			// const float diff_sqlen = dot(diff, diff);
+			//
+			// acceleration += k * diff_sqlen * normalize(rotated);
+		}
+	}
+
+	particle_forces_rw[P_id].acceleration = acceleration / P_density;
+}
+
+#endif
+
+#if defined(INTEGRATION_KERNEL)
+
+BUFFER_BINDPOINT(PARTICLES_RO_BINDPOINT, std430) readonly buffer ParticlesRO { Particle particles_ro[]; };
+
+BUFFER_BINDPOINT(PARTICLES_RW_BINDPOINT, std430) buffer ParticlesRW { Particle particles_rw[]; };
+
+BUFFER_BINDPOINT(FORCES_BINDPOINT, std430) readonly buffer ParticleForcesRO
+{
+	ParticleForce particle_forces_ro[];
+};
+
+NUMTHREADS_LAYOUT(SIMULATION_BLOCK_SIZE, 1, 1);
+void main()
+{
+	const uint P_id = DTID.x;
+	vec2 position = particles_ro[P_id].position;
+	vec2 velocity = particles_ro[P_id].velocity;
+	vec2 acceleration = particle_forces_ro[P_id].acceleration;
+
+	if (isnan(acceleration.x) || isnan(acceleration.y)) {
+		particles_rw[P_id].position = vec2(0.1, 0.1);
+		particles_rw[P_id].velocity = vec2(0.0);
+		return;
+	}
+
+	// Apply forces from the walls of the square
+	for (uint i = 0; i < 4; ++i) {
+		float dist = dot(vec4(position, 1.0, 0.0), u_planes[i]);
+		acceleration += min(dist, 0.0) * -u_wall_stiffness * u_planes[i].xy;
+	}
+
+	acceleration += u_gravity.xy;
+
+	// Integrate, muh semi-implicit euler in action
+	velocity += u_timestep * acceleration;
+	position += u_timestep * velocity;
+
+	// Update
+	particles_rw[P_id].position = position;
+	particles_rw[P_id].velocity = velocity;
+}
+
+#endif
+
+#if defined(ADVANCE_KERNEL)
+
+BUFFER_BINDPOINT(PARTICLES_RO_BINDPOINT, std430) readonly buffer ParticlesRO { Particle particles_ro[]; };
+
+BUFFER_BINDPOINT(PARTICLES_RW_BINDPOINT, std430) buffer ParticlesRW { Particle particles_rw[]; };
+
+NUMTHREADS_LAYOUT(SIMULATION_BLOCK_SIZE, 1, 1);
+void main()
+{
+	const uint P_id = DTID.x;
+	vec2 position = particles_ro[P_id].position;
+
+	// Update
+	particles_rw[P_id].position = position + 0.1 * u_timestep;
+}
+
+#endif
+
+// ---------------- Shared memory based implementation
+
+#if defined(DENSITY_SHAREDMEM_KERNEL)
+
+BUFFER_BINDPOINT(PARTICLES_RO_BINDPOINT, std430) buffer ParticlesRO { Particle particles_ro[]; };
+
+BUFFER_BINDPOINT(DENSITIES_BINDPOINT, std430) buffer ParticlesDensityRW
+{
+	ParticleDensity particles_density_rw[];
+};
+
+shared vec2 shared_pos[SIMULATION_BLOCK_SIZE];
+
+NUMTHREADS_LAYOUT(SIMULATION_BLOCK_SIZE, 1, 1)
+void main()
+{
+	const uint P_ID = DTID.x;
+	const float h_sq = u_smooth_len * u_smooth_len;
+	const vec2 P_position = particles_ro[P_ID].position;
+
+	float density = 0;
+
+	// Loop to store a full block worth of particle positions into the shared array. This is just
+	// that. No knowledge of proximity is used in this algorithm either. So it's still O(N^2).
+	for (uint first_particle_id = 0; first_particle_id < u_num_particles;
+			 first_particle_id += SIMULATION_BLOCK_SIZE) {
+		shared_pos[GI] = particles_ro[first_particle_id + GI].position;
+
+		groupMemoryBarrier();
+		barrier();
+
+		// Calculate the density contribution from the particles in this block
+		for (uint local_id = 0; local_id < SIMULATION_BLOCK_SIZE; ++local_id) {
+			vec2 N_position = shared_pos[local_id];
+			vec2 diff = N_position - P_position;
+			float r_sq = dot(diff, diff);
+
+			if (r_sq < h_sq) {
+				density += calculate_density(r_sq);
+			}
+		}
+
+		groupMemoryBarrier();
+		barrier();
+	}
+
+	particles_density_rw[P_ID].density = density;
+}
+#endif
+
+#if defined(FORCE_SHAREDMEM_KERNEL)
+
+BUFFER_BINDPOINT(PARTICLES_RO_BINDPOINT, std430) buffer ParticlesRO { Particle particles_ro[]; };
+
+BUFFER_BINDPOINT(DENSITIES_BINDPOINT, std430) readonly buffer ParticlesDensityRO
+{
+	ParticleDensity particles_density_ro[];
+};
+
+BUFFER_BINDPOINT(FORCES_BINDPOINT, std430) buffer ParticleForcesRW { ParticleForce particle_forces_rw[]; };
+
+struct ForceInputParams {
+	vec2 position;
+	vec2 velocity;
+	float density;
+};
+
+shared ForceInputParams force_input_params[SIMULATION_BLOCK_SIZE];
+
+NUMTHREADS_LAYOUT(SIMULATION_BLOCK_SIZE, 1, 1)
+void main()
+{
+	const uint P_ID = DTID.x;
+	vec2 P_position = particles_ro[P_ID].position;
+	vec2 P_velocity = particles_ro[P_ID].velocity;
+	float P_density = particles_density_ro[P_ID].density;
+	float P_pressure = calculate_pressure(P_density);
+
+	float h_sq = u_smooth_len * u_smooth_len;
+
+	vec2 acceleration = vec2(0.0, 0.0);
+
+	// first_particle_id is the id of the particle in the first block
+	for (uint first_particle_id = 0; first_particle_id < u_num_particles;
+			 first_particle_id += SIMULATION_BLOCK_SIZE) {
+		
+		// Store a block worth of particles in the shared memory array
+		force_input_params[GI].position = particles_ro[first_particle_id + GI].position;
+		force_input_params[GI].velocity = particles_ro[first_particle_id + GI].velocity;
+		force_input_params[GI].density = particles_density_ro[first_particle_id + GI].density;
+
+		groupMemoryBarrier();
+		barrier();
+		// ^ Sync. All particles in the blocks have the attributes written into array
+
+		for (uint local_id = 0; local_id < SIMULATION_BLOCK_SIZE; ++local_id) {
+			vec2 N_position = force_input_params[local_id].position;
+
+			vec2 diff = N_position - P_position;
+			float r_sq = dot(diff, diff);
+
+			uint N_ID = first_particle_id + local_id;
+
+			if (r_sq < h_sq && N_ID != P_ID) {
+				vec2 N_velocity = force_input_params[local_id].velocity;
+				float N_density = force_input_params[local_id].density;
+				float N_pressure = calculate_pressure(N_density);
+
+				float r = sqrt(r_sq);
+
+				acceleration += calculate_grad_pressure(r, P_pressure, N_pressure, N_density, diff);
+				acceleration += calculate_lap_velocity(r, P_velocity, N_velocity, N_density);
+			}
+		}
+
+		groupMemoryBarrier();
+		barrier();
+	}
+
+	particle_forces_rw[P_ID].acceleration = acceleration / P_density;
+}
+
+#endif

@@ -1,0 +1,59 @@
+#version 430 core
+
+#if !defined(NUM_ELEMENTS_PER_GROUP)
+#    error "NUM_ELEMENTS_PER_GROUP needs to be defined"
+#endif
+
+/* __macro__
+
+NUM_ELEMENTS_PER_GROUP = int
+SORT_PARAMS_BINDING = int
+
+*/
+
+#define GTID gl_LocalInvocationID  // ID of this thread relative to its group
+#define GID gl_WorkGroupID         // ID of this thread's group
+#define DTID gl_GlobalInvocationID // ID of this thread relative to the global grid
+#define GI gl_LocalInvocationIndex // Flat index of this thread relative to its group. GTID.x * GTID.y * GTID.z
+#define GSIZE gl_NumWorkGroups    // Number of groups in each axis
+#define WSIZE gl_WorkGroupSize    // Number of threads in each axis of a group (also given as layout qualifer)
+
+layout(binding = 0, std430) buffer NumbersSequence { uint seq[]; };
+
+layout(binding = SORT_PARAMS_BINDING, std140) uniform SortParamsUF {
+    uint u_level;
+    uint u_level_mask;
+    uint width;
+    uint height;
+};
+
+#define groupMemoryBarrierWithGroupSync                                                                      \
+    groupMemoryBarrier();                                                                                    \
+    barrier
+
+shared uint shared_data[NUM_ELEMENTS_PER_GROUP];
+
+layout(local_size_x = NUM_ELEMENTS_PER_GROUP, local_size_y = 1, local_size_z = 1) in;
+void main() {
+    // Load into personal slot in the shared memory, and wait for others threads in this group to do
+    // the same.
+    shared_data[GI] = seq[DTID.x];
+
+    groupMemoryBarrierWithGroupSync();
+
+    const bool should_swap = (u_level_mask & DTID.x) != 0;
+
+    // Sorting network from stride = u_level / 2 down to 1.
+    for (uint stride = u_level >> 1; stride > 0; stride >>= 1) {
+        uint result = ((shared_data[GI & ~stride] <= shared_data[GI | stride]) == should_swap)
+                          ? shared_data[GI ^ stride]
+                          : shared_data[GI];
+
+        groupMemoryBarrierWithGroupSync();
+
+        shared_data[GI] = result;
+        groupMemoryBarrierWithGroupSync();
+    }
+
+    seq[DTID.x] = shared_data[GI];
+}

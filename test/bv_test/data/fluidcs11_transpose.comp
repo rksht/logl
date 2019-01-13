@@ -1,0 +1,64 @@
+#version 430 core
+
+#if !defined(NUM_ELEMENTS_PER_GROUP)
+#    error "NUM_ELEMENTS_PER_GROUP needs to be defined"
+#endif
+
+/* __macro__
+
+NUM_ELEMENTS_PER_GROUP = uint
+SORT_PARAMS_BINDING = int
+TRANSPOSE_BLOCK_SIZE = int
+
+*/
+
+#define GTID gl_LocalInvocationID  // ID of this thread relative to its group
+#define GID gl_WorkGroupID         // ID of this thread's group
+#define DTID gl_GlobalInvocationID // ID of this thread relative to the global grid
+#define GI gl_LocalInvocationIndex // Flat index of this thread relative to its group.
+#define GSIZE gl_NumWorkGroups     // Number of groups in each axis
+#define WSIZE gl_WorkGroupSize // Number of threads in each axis of a group (also given as layout qualifer)
+
+// The RW buffer is updated during the matrix transpose and the R0 buffer is the one whose transpose
+// is being computed.
+layout(binding = 0, std430) readonly buffer MatrixInput { uint matrix_input[]; };
+layout(binding = 1, std430) writeonly buffer MatrixOutput { uint matrix_output[]; };
+
+layout(binding = SORT_PARAMS_BINDING, std140) uniform SortParamsUF {
+    uint u_level; // Unused
+    uint u_level_mask;
+    uint u_matrix_width;  // Width of input matrix
+    uint u_matrix_height; // Height of input matrix
+};
+
+#define groupMemoryBarrierWithGroupSync                                                                      \
+    groupMemoryBarrier();                                                                                    \
+    barrier
+
+/*
+
+Matrix transpose is done by transposing square sub-matrices in a group and then storing it into the
+appropriate place in the output matrix. The whole NUM_ELEMENTS is seen as a matrix of width
+NUM_ELEMENTS_PER_GROUP, and height H = NUM_ELEMENTS / NUM_ELEMENTS_PER_GROUP. Each thread group
+transposes a square sub-matrix of dimension width = TRANSPOSE_BLOCK_SIZE and height =
+TRANSPOSE_BLOCK_SIZE.
+
+*/
+
+shared uint sub_matrix[TRANSPOSE_BLOCK_SIZE * TRANSPOSE_BLOCK_SIZE];
+
+layout(local_size_x = TRANSPOSE_BLOCK_SIZE, local_size_y = TRANSPOSE_BLOCK_SIZE, local_size_z = 1) in;
+void main() {
+    // Read corresponding element from the global matrix at local DTID.yx into the local matrix.
+
+    sub_matrix[GI] = matrix_input[DTID.y * u_matrix_width + DTID.x];
+    groupMemoryBarrierWithGroupSync();
+
+    // This requires some explanation. I have a note on it. Note that we are reading and storing the local
+    // diagonally opposite element, which is GTID.yx.
+    
+    uvec2 opp_xy = DTID.yx - GTID.yx + GTID.xy;
+    matrix_output[opp_xy.y * u_matrix_height + opp_xy.x] = sub_matrix[GTID.x * TRANSPOSE_BLOCK_SIZE + GTID.y];
+
+    // TODO: ^ Try to just transfer sub_matrix[GI] instead.
+}

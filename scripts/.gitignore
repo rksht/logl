@@ -1,0 +1,8 @@
+*.png
+*.so
+*.dll
+*.lib
+*.obj
+*.exp
+__pycache__/
+stb_image.so

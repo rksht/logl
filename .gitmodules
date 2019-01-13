@@ -1,0 +1,20 @@
+[submodule "third/glfw"]
+	path = third/glfw
+	url = https://github.com/glfw/glfw.git
+
+[submodule "third/scaffold"]
+	path = third/scaffold
+	url = https://github.com/rksht/scaffold.git
+
+[submodule "third/loguru"]
+	path = third/loguru
+	url = https://github.com/emilk/loguru.git
+
+[submodule "third/argh"]
+	path = third/argh
+	url = https://github.com/adishavit/argh
+
+[submodule "third/shaderc"]
+	path = third/shaderc
+	url = https://github.com/google/shaderc.git
+	branch = known-good

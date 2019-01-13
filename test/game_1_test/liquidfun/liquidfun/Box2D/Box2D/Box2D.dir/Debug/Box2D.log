@@ -1,0 +1,11 @@
+﻿c:\users\soumik rakshit\work\samples\logl\test\game_1_test\liquidfun\liquidfun\box2d\box2d\dynamics\joints\b2wheeljoint.cpp(144): error C2220: warning treated as error - no 'object' file generated
+c:\users\soumik rakshit\work\samples\logl\test\game_1_test\liquidfun\liquidfun\box2d\box2d\dynamics\joints\b2wheeljoint.cpp(144): warning C4456: declaration of 'd' hides previous local declaration
+c:\users\soumik rakshit\work\samples\logl\test\game_1_test\liquidfun\liquidfun\box2d\box2d\dynamics\b2island.cpp(315): error C2220: warning treated as error - no 'object' file generated
+c:\users\soumik rakshit\work\samples\logl\test\game_1_test\liquidfun\liquidfun\box2d\box2d\dynamics\b2island.cpp(315): warning C4456: declaration of 'i' hides previous local declaration
+c:\users\soumik rakshit\work\samples\logl\test\game_1_test\liquidfun\liquidfun\box2d\box2d\collision\shapes\b2polygonshape.cpp(284): error C2220: warning treated as error - no 'object' file generated
+c:\users\soumik rakshit\work\samples\logl\test\game_1_test\liquidfun\liquidfun\box2d\box2d\collision\shapes\b2polygonshape.cpp(284): warning C4457: declaration of 'distance' hides function parameter
+c:\users\soumik rakshit\work\samples\logl\test\game_1_test\liquidfun\liquidfun\box2d\box2d\collision\b2collidecircle.cpp(141): error C2220: warning treated as error - no 'object' file generated
+c:\users\soumik rakshit\work\samples\logl\test\game_1_test\liquidfun\liquidfun\box2d\box2d\collision\b2collidecircle.cpp(141): warning C4456: declaration of 'separation' hides previous local declaration
+c:\users\soumik rakshit\work\samples\logl\test\game_1_test\liquidfun\liquidfun\box2d\box2d\particle\b2particlesystem.cpp(1737): error C2220: warning treated as error - no 'object' file generated
+c:\users\soumik rakshit\work\samples\logl\test\game_1_test\liquidfun\liquidfun\box2d\box2d\particle\b2particlesystem.cpp(1737): warning C4456: declaration of 'i' hides previous local declaration
+c:\users\soumik rakshit\work\samples\logl\test\game_1_test\liquidfun\liquidfun\box2d\box2d\particle\b2particlesystem.cpp(1779): warning C4456: declaration of 'i' hides previous local declaration

@@ -1,0 +1,10 @@
+world_bounds = {
+	"min": [-5.0, -5.0],
+	"max": [5.0, 5.0]
+}
+
+line_strips = {
+	basic_line_strip = [
+		[-2.0, -1.0, 1.0, 2.0]
+	]
+}

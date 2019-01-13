@@ -1,0 +1,8 @@
+texture_width 	= 1024
+texture_height 	= 1024
+
+groups_x = 2048
+groups_y = 2048
+
+threads_per_group_x = 1
+threads_per_group_y = 1

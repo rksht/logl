@@ -1,0 +1,25 @@
+{
+    "size" : {"w" : 800, "h" : 600},
+    "background" : {"color" : "#efefef"},
+    "grid_side": 20,
+    "objects" : [
+        {
+            "position" : {"x" : 0, "y" : 0},
+            "size" : {"w" : 800, "h" : 600},
+            "type" : "image",
+            "url" : "/home/snyp/gits/learnogl/test/font_test/Cgirl2.png"
+        },
+        {
+            "position" : {"x" : 200, "y" : 120},
+            "size" : {"w" : 400, "h" : 300},
+            "type" : "rectangle",
+            "color" : "#ff7f9e"
+        },
+        {
+            "position" : {"x" : 0, "y" : 0},
+            "size" : {"w" : 400, "h" : 300},
+            "type" : "rectangle",
+            "color" : "#9fde22"
+        }
+    ]
+}

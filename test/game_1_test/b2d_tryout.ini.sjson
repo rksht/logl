@@ -1,0 +1,16 @@
+window = {
+	width = 1366
+	height = 768
+
+	clear_color = [0.3, 0.3, 0.8, 1.0]
+}
+
+b2d_world = {
+	pixels_per_meter = 360.0
+}
+
+debug_grid = {
+	bounds_x = [-10.0, 10.0]
+	bounds_y = [-10.0, 10.0]
+	cell_size_xy = [1.0, 1.0]
+}

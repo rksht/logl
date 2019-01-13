@@ -1,0 +1,12 @@
+TODO
+
+	- Render manager (continuing). Introduce the concept of renderpass and resources per render-pass. But in OpenGL, I don't think that's a super-important thing other than a good mental model. Definitely useful in some other API like Metal or Vulkan.
+
+	- Sort+Sharedmem based SPH
+
+  - Box2D, particularly LF rendering.
+  
+  - That console thing.. yeah, remove it. ImGui's console widget should be better.
+
+  - Explore global illumination.
+  
