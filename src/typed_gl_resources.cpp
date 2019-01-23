@@ -1,13 +1,8 @@
-#define RENDERER_COMPILE
+#include <learnogl/glsl_inspect.h>
+#include <learnogl/shader.h>
+#include <learnogl/typed_gl_resources.h>
 
-#if defined(RENDERER_COMPILE)
-
-#    include <learnogl/glsl_inspect.h>
-#    include <learnogl/typed_gl_resources.h>
-
-#    include <scaffold/ordered_map.h>
-
-#    include <learnogl/shader.h>
+#include <scaffold/ordered_map.h>
 
 namespace eng {
 
@@ -521,12 +516,12 @@ void set_rs_state(RenderManager &rm, RasterizerStateID state_id) {
     set_gl_rasterizer_state(desc);
 }
 
-#    if 0
+#if 0
 void set_blendfunc_state(RenderManager &rm, BlendFunctionStateID state_id) {
     auto &desc = rm._cached_blendfunc_states[state_id._id];
     set_gl_blendfunc_state(desc);
 }
-#    endif
+#endif
 
 namespace internal {
 
@@ -578,39 +573,25 @@ void bind_to_bindpoint(RenderManager &self, UniformBufferHandle ubo_handle, GLui
     glBindBufferRange(GL_UNIFORM_BUFFER, bindpoint, h, 0, size);
 }
 
-#    if 0
-struct NewFBO {
-    FBOConfig _config;
-    std::array<GLResource64, MAX_FBO_ATTACHMENTS> _color_textures = {};
-    GLResource64 _depth_texture = 0;
-    GLResource64 _fbo_id64 = 0;
-
-    // Set this to the clear color you want
-    fo::Vector4 clear_color = eng::math::zero_4;
-    f32 clear_depth = -1.0f;
-
-    u32 num_color_textures() const {
-        u32 count = 0;
-        for (auto id64 : _color_textures) {
-            count += u32(GLResource64_RMID_Mask::extract(id64) != 0);
-        }
-        return count;
-    }
-
-    bool has_depth_texture() const { return GLResource64_RMID_Mask::extract(_depth_texture) != 0; }
-};
-
-#    endif
-
-void create_fbo(RenderManager &self,
-                const fo::Array<RMResourceID16> &color_textures,
-                RMResourceID16 depth_texture,
-                const char *debug_label) {
+FboId create_fbo(RenderManager &self,
+                 const fo::Array<RMResourceID16> &color_textures,
+                 RMResourceID16 depth_texture,
+                 const char *debug_label) {
     FBO fbo_with_glhandle;
     fbo_with_glhandle.gen(debug_label);
 
+    NewFBO new_fbo;
+
+    fo::TempAllocator256 ta;
+    fo::Array<const TextureInfo *> texture_infos(ta);
+
     for (u32 i = 0; i < fo::size(color_textures); ++i) {
         auto rmid16 = color_textures[i];
+
+        // 0 denotes no texture backing this color attachment.
+        if (rmid16 == 0) {
+            continue;
+        }
 
         auto lookup = find_with_end(self._rmid16_to_res64, rmid16);
 
@@ -619,24 +600,53 @@ void create_fbo(RenderManager &self,
         GLResource64 res64 = lookup.keyvalue().second();
         GLuint gl_handle = GLResource64_GLuint_Mask::extract(res64);
         fbo_with_glhandle.add_attachment(i, gl_handle);
+
+        new_fbo._color_textures[i] = res64;
+
+        auto &texture_info = find_with_end(self.texture_info, rmid16).keyvalue_must().second();
+        fo::push_back(texture_infos, &texture_info);
     }
 
     if (depth_texture != 0) {
         auto lookup = find_with_end(self._rmid16_to_res64, depth_texture);
-        CHECK_F(lookup.found(), "Did not find any gl texture created with rmid = %u", u32(depth_texture));
+        CHECK_F(
+            lookup.found(), "Did not find any gl depth texture created with rmid = %u", u32(depth_texture));
 
         GLResource64 res64 = lookup.keyvalue().second();
         GLuint gl_handle = GLResource64_GLuint_Mask::extract(res64);
         fbo_with_glhandle.add_depth_attachment(gl_handle);
+
+        new_fbo._depth_texture = res64;
+
+        auto &texture_info = find_with_end(self.texture_info, depth_texture).keyvalue_must().second();
+        fo::push_back(texture_infos, &texture_info);
     }
 
     fbo_with_glhandle.set_done_creating();
 
-    // Store the texture config in _config field.
-    // ---
-
     RMResourceID16 id16 = new_resource_id(self);
-    encode_glresource64(id16, GLObjectKind::FRAMEBUFFER, fbo_with_glhandle._fbo_handle);
+    new_fbo._fbo_id64 = encode_glresource64(id16, GLObjectKind::FRAMEBUFFER, fbo_with_glhandle._fbo_handle);
+
+    // Store the per attachment config.
+
+    for (u32 i = 0; i < fo::size(texture_infos); ++i) {
+        const TextureInfo *texture_info = texture_infos[i];
+        if (!texture_info) {
+            continue;
+        }
+
+        auto &attachment_info = i == fo::size(color_textures) ? new_fbo._dims.depth_attachment_dim
+                                                              : new_fbo._dims.color_attachment_dims[i];
+
+        attachment_info.width = texture_info->width;
+        attachment_info.height = texture_info->height;
+        attachment_info.fetch_type = texture_info->fetch_type;
+        attachment_info.client_type = texture_info->client_type;
+    }
+
+    fo::push_back(self._fbos, new_fbo);
+
+    return FboId{ (u16)(fo::size(self._fbos) - 1) };
 }
 
 // Impl of miscellaneous pure helper functions
@@ -667,5 +677,3 @@ VaoFormatDesc vao_format_from_mesh_data(const mesh::StrippedMeshData &m) {
 }
 
 } // namespace eng
-
-#endif

@@ -239,8 +239,7 @@ ENUMSTRUCT TexelFetchType {
     DECL_BITS_CHECK(u32);
 };
 
-// What the components are in the client texture (before sourcing, or after
-// packing them to the client side)
+// What the components are in the client texture (before sourcing, or after packing them to the client side)
 ENUMSTRUCT TexelOrigType {
     enum E : u32 { INVALID = 0, FLOAT, U8, U16, U32, S8, S16, S32, DEPTH32, COUNT };
 
@@ -509,21 +508,27 @@ using VarShaderHandle = ::VariantTable<VertexShaderHandle,
                                        TessEvalShaderHandle,
                                        ComputeShaderHandle>;
 
-struct FBOConfig {
+// Some useful per FBO info for our purposes will be to know the data type and dimension of each attachment. I
+// should just keep this data in NewFBO instead of creating a separate type..
+struct FboPerAttachmentDim {
     struct AttachmentInfo {
         u16 width = 0;
         u16 height = 0;
         TexelFetchType::E fetch_type = TexelFetchType::INVALID;
         TexelOrigType::E client_type = TexelOrigType::INVALID;
+
+        // Is valid if a texture is backing this attachment
+        bool valid() const { return fetch_type != TexelFetchType::INVALID; }
     };
 
-    std::array<AttachmentInfo, MAX_FBO_ATTACHMENTS> attachment_info;
+    std::array<AttachmentInfo, MAX_FBO_ATTACHMENTS> color_attachment_dims;
+    AttachmentInfo depth_attachment_dim;
 
-    bool operator==(const FBOConfig &o) const { return memcmp(this, &o, sizeof(*this)) == 0; }
+    bool operator==(const FboPerAttachmentDim &o) const { return memcmp(this, &o, sizeof(*this)) == 0; }
 };
 
 struct NewFBO {
-    FBOConfig _config;
+    FboPerAttachmentDim _dims;
     std::array<GLResource64, MAX_FBO_ATTACHMENTS> _color_textures = {};
     GLResource64 _depth_texture = 0;
     GLResource64 _fbo_id64 = 0;
@@ -585,10 +590,9 @@ struct RenderManager : NonCopyable {
         fo::make_pod_hash<RMResourceID16, int>(_allocator);
 
     fo::OrderedMap<SamplerDesc, RMResourceID16> sampler_cache{ _allocator };
-
-    fo::Array<RasterizerStateDesc> _cached_rasterizer_states;
-    fo::Array<DepthStencilStateDesc> _cached_depth_stencil_states;
-    fo::Array<BlendFunctionDesc> _cached_blendfunc_states;
+    fo::Array<RasterizerStateDesc> _cached_rasterizer_states{ _allocator };
+    fo::Array<DepthStencilStateDesc> _cached_depth_stencil_states{ _allocator };
+    fo::Array<BlendFunctionDesc> _cached_blendfunc_states{ _allocator };
 
     // All the currently allocated FBOs.
     fo::Vector<NewFBO> _fbos{ _allocator };
@@ -646,9 +650,13 @@ struct GL_ShaderResourceBinding {
     GLResource64 resource;
 };
 
-void create_fbo(RenderManager &self,
-                const fo::Array<RMResourceID16> &color_textures,
-                RMResourceID16 depth_texture = 0);
+struct FboId {
+    u16 _id;
+};
+
+FboId create_fbo(RenderManager &self,
+                 const fo::Array<RMResourceID16> &color_textures,
+                 RMResourceID16 depth_texture = 0);
 
 struct RenderManagerInitConfig {
     MaxCombinedShaderResourceViews max_combined;
@@ -663,20 +671,49 @@ void init_render_manager(RenderManager &self,
 
 void shutdown_render_manager(RenderManager &self);
 
-struct RasterizerStateID {
+// -- These are simple ids for the stored render states.
+
+struct RasterizerStateId {
     u16 _id;
-    u16 id() { return _id; }
 };
 
-struct DepthStencilStateID {
+struct DepthStencilStateId {
     u16 _id;
-    u16 id() { return _id; }
 };
 
-struct BlendFunctionStateID {
+struct BlendFunctionDescId {
     u16 _id;
-    u16 id() { return _id; }
 };
+
+inline RasterizerStateId add_rasterizer_state(RenderManager &rm, const RasterizerStateDesc &rs) {
+    for (u32 i = 0; i < size(rm._cached_rasterizer_states); ++i) {
+        if (rm._cached_rasterizer_states[i] == rs) {
+            return RasterizerStateId{ (u16)i };
+        }
+    }
+    push_back(rm._cached_rasterizer_states, rs);
+    return RasterizerStateId{ (u16)(size(rm._cached_rasterizer_states) - 1) };
+}
+
+inline DepthStencilStateId add_depth_stencil_state(RenderManager &rm, const DepthStencilStateDesc &ds) {
+    for (u32 i = 0; i < size(rm._cached_depth_stencil_states); ++i) {
+        if (memcmp(&ds, &rm._cached_depth_stencil_states[i], sizeof(DepthStencilStateDesc)) == 0) {
+            return DepthStencilStateId{ (u16)i };
+        }
+    }
+    fo::push_back(rm._cached_depth_stencil_states, ds);
+    return DepthStencilStateId{ (u16)(fo::size(rm._cached_depth_stencil_states) - 1) };
+}
+
+inline BlendFunctionDescId add_blend_function_desc(RenderManager &rm, const BlendFunctionDesc &bf) {
+    for (u32 i = 0; i < size(rm._cached_blendfunc_states); ++i) {
+        if (memcmp(&bf, &rm._cached_blendfunc_states[i], sizeof(DepthStencilStateDesc)) == 0) {
+            return BlendFunctionDescId{ (u16)i };
+        }
+    }
+    fo::push_back(rm._cached_blendfunc_states, bf);
+    return BlendFunctionDescId{ (u16)(fo::size(rm._cached_blendfunc_states) - 1) };
+}
 
 // -- Buffer creation functions
 

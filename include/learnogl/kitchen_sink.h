@@ -381,6 +381,11 @@ template <typename FoundIterator, typename EndIterator> struct FindWithEnd {
 
     auto &keyvalue() { return *res_it; }
 
+    auto &keyvalue_must(const char *msg = "") {
+        CHECK_F(found(), msg);
+        return *res_it;
+    }
+
     bool not_found() const { return res_it == end_it; }
     bool found() const { return !not_found(); }
 
@@ -730,8 +735,7 @@ template <typename U> struct is_reference_wrapper<std::reference_wrapper<U>> : s
 
 template <typename T> constexpr bool is_reference_wrapper_v = is_reference_wrapper<T>::value;
 
-template <class T, class Type, class T1, class... Args>
-auto INVOKE(Type T::*f, T1 &&t1, Args &&... args) {
+template <class T, class Type, class T1, class... Args> auto INVOKE(Type T::*f, T1 &&t1, Args &&... args) {
     if (std::is_member_function_pointer<decltype(f)>::value) {
         if (std::is_base_of<T, std::decay_t<T1>>::value) {
             return (std::forward<T1>(t1).*f)(std::forward<Args>(args)...);

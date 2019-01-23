@@ -219,7 +219,7 @@ struct BlendFunctionDesc {
 
 namespace logl_internal {
 
-inline constexpr BlendFunctionDesc make_default_blendfunc_state() {
+constexpr BlendFunctionDesc make_default_blendfunc_state() {
     BlendFunctionDesc config{};
     config.src_rgb_factor = BlendFactor::ONE;
     config.dst_rgb_factor = BlendFactor::ONE;
@@ -293,7 +293,7 @@ inline void BlendFunctionDesc::set_default() { *this = default_blendfunc_state; 
 
 namespace logl_internal {
 
-inline constexpr RasterizerStateDesc make_default_rasterizer_desc() {
+constexpr RasterizerStateDesc make_default_rasterizer_desc() {
     RasterizerStateDesc rs{};
     rs.cull_side = GL_BACK;
     rs.front_face = GL_CCW;
@@ -358,7 +358,7 @@ struct DepthStencilStateDesc {
 
 namespace logl_internal {
 
-inline constexpr DepthStencilStateDesc make_default_depth_stencil_state_desc() {
+constexpr DepthStencilStateDesc make_default_depth_stencil_state_desc() {
     DepthStencilStateDesc d = {};
     d.enable_depth_test = GL_TRUE;
     d.enable_depth_write = GL_TRUE;

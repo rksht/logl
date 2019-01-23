@@ -17,21 +17,26 @@ struct AppThings {
 GLOBAL_STORAGE(AppThings, the_app);
 GLOBAL_ACCESSOR_FN(AppThings, the_app, get_app);
 #define APPSTRUCT get_app()
-#define APPDUK get_app().duk.C()
 
-void init_opengl_resources() {
+void init_opengl_resources()
+{
     glCreateTextures(GL_TEXTURE_2D, 1, &APPSTRUCT.float_texture);
     glTextureStorage2D(APPSTRUCT.float_texture, 1, GL_R32F, glparams.window_width, glparams.window_height);
 
     APPSTRUCT.f32_fbo.gen("@f32_fbo")
-        .bind()
-        .add_attachment(0, APPSTRUCT.float_texture)
-        .set_done_creating()
-        .bind_as_readable();
+      .bind()
+      .add_attachment(0, APPSTRUCT.float_texture)
+      .set_done_creating()
+      .bind_as_readable();
 }
 
 struct FluidProperties {
     f32 kinematic_viscosity;
+};
+
+struct QuantityVisualizer {
+    std::pair<f32, f32> max_and_min = {};
+    std::pair<f32, f32> max_and_min_map = { 0.0f, 1.0f };
 };
 
 struct FluidQuantity {
@@ -43,14 +48,13 @@ struct FluidQuantity {
     // ^ Number of quantities sampled along x and y. Don't read as 'width' and 'height', as that gives a wrong
     // impression.
 
-
     double _ox;
     double _oy;
-    // ^ x and y (in units of cell size) of the the quantity. The cell (i, j) stores the quantity sampled at
-    // the location (i + _ox, j + _oy).
+    // ^ x and y (in units of cell size, i.e. fraction of it) of the the quantity. The cell (i, j) stores the
+    // quantity sampled at the location (i + _ox, j + _oy).
 
     double _hx;
-    // ^ grid cell size.
+    // ^ grid cell size in 'world units '.
 
     // Velocity is stored in real-units per second.
 
@@ -59,9 +63,10 @@ struct FluidQuantity {
         , _h(h)
         , _ox(ox)
         , _oy(oy)
-        , _hx(hx) {
+        , _hx(hx)
+    {
         fo::resize_with_given(_src, _w * _h, 0.0);
-        fo::resize_with_given(_dst, _w * _h, 0.0);
+        / fo::resize_with_given(_dst, _w * _h, 0.0);
     }
 
     // idk why @tunabrain keeps this function in this class, it doesn't depend on the class at all.
@@ -77,14 +82,17 @@ struct FluidQuantity {
     Vector2_64 backtrace_using_forward_euler(Vector2_64 pos,
                                              double timestep,
                                              const FluidQuantity &u,
-                                             const FluidQuantity &v) const {
+                                             const FluidQuantity &v) const
+    {
         double u_vel = u.reconstruct_at(pos) / _hx;
         double v_vel = v.reconstruct_at(pos) / _hx;
         // ^ Reconstruct the velocity at given position. Divide by cell size to get velocity in units of
         // `cells per second`
 
+        // Simply forward Euler but backward in time. x)
         pos.x -= u_vel * timestep;
         pos.y -= v_vel * timestep;
+
         return pos;
     }
 
@@ -98,7 +106,8 @@ struct FluidQuantity {
 
     // Reconstruct this quantity at the point (x, y). Uses simple bilinear interpolation to estimate the value
     // of this quantity at given point.
-    double reconstruct_at(Vector2_64 pos) const {
+    double reconstruct_at(Vector2_64 pos) const
+    {
         double x = clamp(pos.x - _ox, 0.0, _w - 1.001);
         double y = clamp(pos.y - _ox, 0.0, _h - 1.001);
         int ix = int(x);
@@ -114,22 +123,23 @@ struct FluidQuantity {
         double s01 = at(ix, iy + 1);
         double s11 = at(ix + 1, iy + 1);
 
-        double l0 = ::eng::lerp(s00, s10, x);
-        double l1 = ::eng::lerp(s01, s11, x);
-        double l = ::eng::lerp(l0, l1, y);
+        double l0 = ::eng::math::lerp(s00, s10, x);
+        double l1 = ::eng::math::lerp(s01, s11, x);
+        double l = ::eng::math::lerp(l0, l1, y);
         // ^bilinear interpolation
         return l;
     }
 
     // Advects this quantity by the velocity field
-    void advect(double timestep, const FluidQuantity &u, const FluidQuantity &v) {
+    void advect(double timestep, const FluidQuantity &u, const FluidQuantity &v)
+    {
         for (int iy = 0, idx = 0; iy < _h; ++iy) {
             for (int ix = 0; ix < _w; ++ix, ++idx) {
                 double x = ix + _ox;
                 double y = iy + _oy;
                 // ^ Position of the stored samples
 
-                Vector2_64 source_pos = backtrace_using_forward_euler({x, y}, timestep, u, v);
+                Vector2_64 source_pos = backtrace_using_forward_euler({ x, y }, timestep, u, v);
 
                 // Get the quantity at the source position.
                 double quantity = reconstruct_at(source_pos);
@@ -175,7 +185,8 @@ void visualize() {
 }
 #endif
 
-int main(int ac, char **av) {
+int main(int ac, char **av)
+{
     eng::init_memory();
     DEFERSTAT(eng::shutdown_memory());
 

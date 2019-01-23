@@ -67,5 +67,5 @@ target_link_libraries(duk_tryout learnogl)
 # add_executable(sound_test sound_test.cpp)
 # target_link_libraries(sound_test learnogl)
 
-add_executable(stams_simple_fluid stams_simple_fluid.cpp duk_helper.h duk_helper.cpp)
+add_executable(stams_simple_fluid stams_simple_fluid.cpp)
 target_link_libraries(stams_simple_fluid learnogl)
