@@ -212,8 +212,6 @@ template <> struct less<eng::ShaderSourceType> {
         }
 
         if (index[0] == vt_index<eng::ShaderSourceType, fs::path>) {
-            auto &s1 = get_value<fs::path>(source1);
-            auto &s2 = get_value<fs::path>(source2);
             return source1 < source2;
         }
 

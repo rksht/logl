@@ -7,7 +7,7 @@
 #include <loguru.hpp>
 
 using namespace fo;
-using namespace math;
+using namespace fo::math;
 
 // Textures used in the app
 enum TextureBindings : GLuint {

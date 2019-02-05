@@ -28,7 +28,19 @@ const char *nfjp_parse_with_settings(const char *s, struct nfcd_ConfigData **cdp
 
 // nf_config_data.c
 
-struct nfcd_ConfigData;
+typedef int nfcd_loc;
+
+typedef void *(*nfcd_realloc)(void *ud, void *ptr, int osize, int nsize, const char *file, int line);
+
+// Container for the config data. IMPORTANT: Change in both nf_config_data.cpp and this.
+struct nfcd_ConfigData {
+    int total_bytes;
+    int allocated_bytes;
+    int used_bytes;
+    nfcd_loc root;
+    nfcd_realloc realloc;
+    void *realloc_user_data;
+};
 
 enum {
     NFCD_TYPE_NULL,

@@ -1,4 +1,3 @@
-#include <learnogl/glsl_inspect.h>
 #include <learnogl/shader.h>
 #include <learnogl/typed_gl_resources.h>
 
@@ -84,7 +83,7 @@ GLbitfield gl_buffer_access(BufferCreateFlags e) {
         b |= GL_MAP_COHERENT_BIT;
     }
     if (e & BufferCreateBitflags::SET_DYNAMIC_STORAGE) {
-        b |= b |= (e & BufferCreateBitflags::USE_BUFFER_STORAGE) ? GL_DYNAMIC_STORAGE_BIT : GL_DYNAMIC_DRAW;
+        b |= (e & BufferCreateBitflags::USE_BUFFER_STORAGE) ? GL_DYNAMIC_STORAGE_BIT : GL_DYNAMIC_DRAW;
     }
 
     return b;
@@ -158,37 +157,37 @@ VertexArrayHandle create_vao(RenderManager &self, const VaoFormatDesc &ci, const
     return VertexArrayHandle{ rmid };
 }
 
-RasterizerStateID create_rs_state(RenderManager &self, const RasterizerStateDesc &desc) {
+RasterizerStateId create_rs_state(RenderManager &self, const RasterizerStateDesc &desc) {
     for (u32 i = 0; i < fo::size(self._cached_rasterizer_states); ++i) {
         auto &cached = self._cached_rasterizer_states[i];
         if (memcmp(&cached, &desc, sizeof(cached)) == 0) {
-            return RasterizerStateID{ (u16)i };
+            return RasterizerStateId{ (u16)i };
         }
     }
     fo::push_back(self._cached_rasterizer_states, desc);
-    return RasterizerStateID{ u16(fo::size(self._cached_rasterizer_states) - 1) };
+    return RasterizerStateId{ u16(fo::size(self._cached_rasterizer_states) - 1) };
 }
 
-DepthStencilStateID create_ds_state(RenderManager &self, const DepthStencilStateDesc &desc) {
+DepthStencilStateId create_ds_state(RenderManager &self, const DepthStencilStateDesc &desc) {
     for (u32 i = 0; i < fo::size(self._cached_depth_stencil_states); ++i) {
         auto &cached = self._cached_depth_stencil_states[i];
         if (memcmp(&cached, &desc, sizeof(cached)) == 0) {
-            return DepthStencilStateID{ (u16)i };
+            return DepthStencilStateId{ (u16)i };
         }
     }
     fo::push_back(self._cached_depth_stencil_states, desc);
-    return DepthStencilStateID{ u16(fo::size(self._cached_depth_stencil_states) - 1) };
+    return DepthStencilStateId{ u16(fo::size(self._cached_depth_stencil_states) - 1) };
 }
 
-BlendFunctionStateID create_blendfunc_state(RenderManager &self, const BlendFunctionDesc &desc) {
+BlendFunctionDescId create_blendfunc_state(RenderManager &self, const BlendFunctionDesc &desc) {
     for (u32 i = 0; i < fo::size(self._cached_blendfunc_states); ++i) {
         auto &cached = self._cached_blendfunc_states[i];
         if (memcmp(&cached, &desc, sizeof(cached)) == 0) {
-            return BlendFunctionStateID{ (u16)i };
+            return BlendFunctionDescId{ (u16)i };
         }
     }
     fo::push_back(self._cached_blendfunc_states, desc);
-    return BlendFunctionStateID{ u16(fo::size(self._cached_blendfunc_states) - 1) };
+    return BlendFunctionDescId{ u16(fo::size(self._cached_blendfunc_states) - 1) };
 }
 
 // clang-format off
@@ -506,18 +505,18 @@ static GLResource64 link_new_program(RenderManager &self,
     return res64;
 }
 
-void set_ds_state(RenderManager &rm, DepthStencilStateID state_id) {
+void set_ds_state(RenderManager &rm, DepthStencilStateId state_id) {
     auto &desc = rm._cached_depth_stencil_states[state_id._id];
     set_gl_depth_stencil_state(desc);
 }
 
-void set_rs_state(RenderManager &rm, RasterizerStateID state_id) {
+void set_rs_state(RenderManager &rm, RasterizerStateId state_id) {
     auto &desc = rm._cached_rasterizer_states[state_id._id];
     set_gl_rasterizer_state(desc);
 }
 
 #if 0
-void set_blendfunc_state(RenderManager &rm, BlendFunctionStateID state_id) {
+void set_blendfunc_state(RenderManager &rm, BlendFunctionDescId state_id) {
     auto &desc = rm._cached_blendfunc_states[state_id._id];
     set_gl_blendfunc_state(desc);
 }

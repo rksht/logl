@@ -102,7 +102,7 @@ using GLResource64_Kind_Mask = Mask64<32, log2_ceil(GLObjectKind::COUNT)>;
 using GLResource64_RMID_Mask = Mask64<GLResource64_Kind_Mask::END,
                                       16>; // 2 ** 16 unique GL objects at any time
 
-using GLFullPipelineStateID = u32;
+using GLFullPipelineStateId = u32;
 using RasterizerStateIndex = u32;
 using DepthStencilStateIndex = u32;
 using BlendStateIndex = u32;
@@ -821,9 +821,9 @@ GLuint create_shader_object(ShaderSourceType shader_source,
 
 VertexArrayHandle create_vao(RenderManager &self, const VaoFormatDesc &ci, const char *debug_label = nullptr);
 
-RasterizerStateID create_rs_state(RenderManager &self, const RasterizerStateDesc &desc);
-DepthStencilStateID create_ds_state(RenderManager &self, const DepthStencilStateDesc &desc);
-BlendFunctionStateID create_blendfunc_state(RenderManager &self, const BlendFunctionDesc &desc);
+RasterizerStateId create_rs_state(RenderManager &self, const RasterizerStateDesc &desc);
+DepthStencilStateId create_ds_state(RenderManager &self, const DepthStencilStateDesc &desc);
+BlendFunctionDescId create_blendfunc_state(RenderManager &self, const BlendFunctionDesc &desc);
 
 inline void clear_screen_fbo_color(RenderManager &self, const fo::Vector4 &color) {
     self._screen_fbo.clear_color(0, color);
@@ -885,13 +885,13 @@ void set_shader_program(RenderManager &rm,
                         const fo::Vector<GLObjectKind> &shader_type);
 
 // Set depth-stencil state
-void set_ds_state(RenderManager &rm, DepthStencilStateID state_id);
+void set_ds_state(RenderManager &rm, DepthStencilStateId state_id);
 
 // Set rasterizer state
-void set_rs_state(RenderManager &rm, RasterizerStateID state_id);
+void set_rs_state(RenderManager &rm, RasterizerStateId state_id);
 
 // Set blend-function state
-// void set_blendfunc_state(RenderManager &rm, BlendFunctionStateID state_id);
+// void set_blendfunc_state(RenderManager &rm, BlendFunctionStateId state_id);
 
 #if 0
 // Renderable objects representation

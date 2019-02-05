@@ -104,6 +104,7 @@ set(rel_include_dirs
     "glad/include"
     "glad_compat/include"
     "argh"
+    "clara"
     "assimp-4.1.0/include"
     "fmt/include"
     "spirv-tools/include"

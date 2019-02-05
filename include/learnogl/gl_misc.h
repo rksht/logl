@@ -132,7 +132,6 @@ struct StartGLParams {
     const char *rdoc_capture_template = nullptr; // Default value of nullptr denotes LOGL_SOURCE_DIR/captures
     fo::Vector4 clear_color = colors::AliceBlue;
     const char *mild_output_logfile = nullptr; // nullptr denotes stderr
-    fs::path resources_dir_path = fs::current_path();
 };
 
 /// Container for all global stuff.

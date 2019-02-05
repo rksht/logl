@@ -75,7 +75,7 @@ const char *nfst_to_string(struct nfst_StringTable *, int symbol);
 // Strings are stored in an nfst_StringTable, so for strings the offset
 // represents the offset into the string table.
 
-// Container for the config data.
+// Container for the config data. IMPORTANT: Change in both nflibs.h and this file.
 struct nfcd_ConfigData {
     int total_bytes;
     int allocated_bytes;

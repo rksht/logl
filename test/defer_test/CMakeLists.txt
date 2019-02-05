@@ -76,3 +76,17 @@ add_executable(order_independent
                essentials.cpp)
 target_link_libraries(order_independent learnogl)
 in_tests_folder(order_independent)
+
+add_executable(with_typed_gl_render
+               with_typed_gl_test.cpp)
+target_link_libraries(with_typed_gl_render learnogl)
+target_compile_options(with_typed_gl_render BEFORE PUBLIC
+  -DWITH_TYPED_TEST_RENDER=1)
+in_tests_folder(with_typed_gl_render)
+
+add_executable(with_typed_gl_generate
+               with_typed_gl_test.cpp)
+target_link_libraries(with_typed_gl_generate learnogl)
+target_compile_options(with_typed_gl_generate BEFORE PUBLIC
+  -DWITH_TYPED_TEST_GENERATE=1)
+in_tests_folder(with_typed_gl_generate)

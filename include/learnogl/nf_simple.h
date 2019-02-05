@@ -11,6 +11,7 @@
 
 #include <loguru.hpp>
 #include <scaffold/debug.h>
+#include <scaffold/string_stream.h>
 #include <string>
 #include <unordered_map>
 #include <variant>
@@ -187,6 +188,9 @@ struct Storage {
     }
 
 } // namespace inistorage
+
+// nfcd_ConfigData to JSON string.
+fo::string_stream::Buffer stringify_nfcd(nfcd_ConfigData *cd, fo::string_stream::Buffer ss = {});
 
 // Functions for parsing some frequently used data types
 

@@ -57,7 +57,7 @@ ShaderDefinesRAII::~ShaderDefinesRAII() {
 static std::string vector_string(const std::vector<float> &v) {
     std::stringstream ss;
     ss << "{";
-    for (int i = 0; i < v.size(); ++i) {
+    for (u32 i = 0; i < v.size(); ++i) {
         ss << v[i] << ", ";
     }
     ss << "}";
@@ -471,8 +471,9 @@ constexpr inline shaderc_shader_kind get_sc_shader_kind(ShaderKind shader_kind) 
         return shaderc_shader_kind::shaderc_glsl_fragment_shader;
     case COMPUTE_SHADER:
         return shaderc_shader_kind::shaderc_glsl_compute_shader;
+    default:
+        return DEFAULT(shaderc_shader_kind);
     }
-    return DEFAULT(shaderc_shader_kind);
 }
 
 constexpr inline GLenum get_gl_shader_kind(ShaderKind shader_kind) {
@@ -489,8 +490,9 @@ constexpr inline GLenum get_gl_shader_kind(ShaderKind shader_kind) {
         return GL_FRAGMENT_SHADER;
     case COMPUTE_SHADER:
         return GL_COMPUTE_SHADER;
+    default:
+        return GL_NONE;
     }
-    return 0;
 }
 
 constexpr inline const char *shader_kind_ext(ShaderKind shader_kind) {
@@ -507,8 +509,9 @@ constexpr inline const char *shader_kind_ext(ShaderKind shader_kind) {
         return "frag";
     case COMPUTE_SHADER:
         return "comp";
+    default:
+        return "glsl";
     }
-    return "glsl";
 }
 
 GLuint compile_preprocessed_shader(const char *shader_cstr, ShaderKind shader_kind, const char *shader_name) {

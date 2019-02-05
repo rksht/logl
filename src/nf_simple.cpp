@@ -188,3 +188,68 @@ void Storage::init_from_file(const fs::path &path, bool keep_config_data) {
 }
 
 } // namespace inistorage
+
+TU_LOCAL void recurse_object(nfcd_ConfigData *cd, fo::string_stream::Buffer &ss, nfcd_loc loc) {
+    using namespace fo::string_stream;
+    switch (nfcd_type(cd, loc)) {
+    case NFCD_TYPE_NULL:
+        ss << "null";
+        break;
+
+    case NFCD_TYPE_TRUE:
+        ss << "true";
+        break;
+
+    case NFCD_TYPE_FALSE:
+        ss << "false";
+        break;
+
+    case NFCD_TYPE_STRING: {
+        const char *s = nfcd_to_string(cd, loc);
+        ss << '"' << s << '"';
+    } break;
+
+    case NFCD_TYPE_NUMBER:
+        ss << nfcd_to_number(cd, loc);
+        break;
+
+    case NFCD_TYPE_ARRAY: {
+        ss << "[";
+        int len = nfcd_array_size(cd, loc);
+        for (int i = 0; i < len; ++i) {
+            nfcd_loc element = nfcd_array_item(cd, loc, i);
+            recurse_object(cd, ss, element);
+            ss << ",";
+        }
+
+        ss << "]";
+    } break;
+
+    case NFCD_TYPE_OBJECT: {
+        ss << "{";
+
+        int len = nfcd_object_size(cd, loc);
+
+        for (int i = 0; i < len; ++i) {
+            nfcd_ObjectItem *item = nfcd_object_item(cd, loc, i);
+            ss << "\"" << nfcd_to_string(cd, item->key) << "\":";
+            recurse_object(cd, ss, item->value);
+            ss << ",";
+        }
+
+        ss << "}";
+    } break;
+
+    default:
+        ABORT_F("Invalid NFCD type '%i'", nfcd_type(cd, loc));
+    }
+};
+
+fo::string_stream::Buffer stringify_nfcd(nfcd_ConfigData *cd, fo::string_stream::Buffer ss) {
+    using namespace fo::string_stream;
+
+    auto root = nfcd_root(cd);
+    recurse_object(cd, ss, root);
+
+    return ss;
+}
