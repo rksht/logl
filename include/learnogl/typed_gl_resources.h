@@ -239,9 +239,11 @@ ENUMSTRUCT TexelFetchType {
     DECL_BITS_CHECK(u32);
 };
 
-// What the components are in the client texture (before sourcing, or after packing them to the client side)
+// What the components are in the client texture (format needed to be known before allocating storage or after
+// packing them to the client side). There are way too many formats. I'm representing only the common ones I
+// can foresee being used.
 ENUMSTRUCT TexelOrigType {
-    enum E : u32 { INVALID = 0, FLOAT, U8, U16, U32, S8, S16, S32, DEPTH32, COUNT };
+    enum E : u32 { INVALID = 0, FLOAT, FLOAT16, U8, U16, U32, S8, S16, S32, DEPTH32, COUNT };
 
     static constexpr bool is_signed(E e) { return S8 <= e && e <= S32; }
     static constexpr bool is_unsigned(E e) { return U8 <= e && e <= U32; }
@@ -273,10 +275,25 @@ ENUMSTRUCT TexelInterpretType {
 /// and NORMALIZED will yield floats in shader. `components` is a semantic that denotes usual components like
 /// R, G, B, A, or DEPTH.
 struct TexelInfo {
-    TexelOrigType::E client_type;
+    TexelOrigType::E internal_type;
     TexelComponents::E components;
     TexelInterpretType::E interpret_type;
 };
+
+constexpr int num_channels_for_components(TexelComponents::E components) {
+    switch (components) {
+    case TexelComponents::R:
+        return 1;
+    case TexelComponents::RG:
+        return 2;
+    case TexelComponents::RGB:
+        return 3;
+    case TexelComponents::RGBA:
+        return 4;
+    default:
+        return 0;
+    }
+}
 
 /// TexelInfo packed into a u32
 using TexelInfo32 = u32;
@@ -291,7 +308,7 @@ inline constexpr TexelInfo32 _ENCODE_TEXEL_INFO(TexelOrigType::E client_type,
 
 inline constexpr TexelInfo _DECODE_TEXEL_INFO(TexelInfo32 bits) {
     TexelInfo info = {};
-    info.client_type = (TexelOrigType::E)TexelOrigType::mask::extract(bits);
+    info.internal_type = (TexelOrigType::E)TexelOrigType::mask::extract(bits);
     info.components = (TexelComponents::E)TexelComponents::mask::extract(bits);
     info.interpret_type = (TexelInterpretType::E)TexelInterpretType::mask::extract(bits);
     return info;
@@ -304,20 +321,27 @@ struct GLExternalFormat {
     constexpr bool invalid() { return component_type != GL_NONE && components != GL_NONE; }
 };
 
+struct GLInternalFormat {
+    GLenum e = GL_NONE;
+};
+
 struct TextureCreateInfo {
     u16 width = 0;
     u16 height = 0;
     u16 depth = 0;
+    u8 mips = 1;
 
-    TexelFetchType::E fetch_type;
-    TexelOrigType::E client_type;
+    // Information regarding type of values texels read/written by shaders and creation/sourcing by client
+    // side.
+    TexelInfo texel_info = {};
 
     // If given storage_texture is valid, creates a texture view with the storage_texture as the backing
     // texture.
     RMResourceID16 storage_texture = 0;
 
-    // Source can be `nullptr`, and in that case only storage will be allocated.
-    ::variant<RMResourceID16, void *, fs::path> source;
+    // Source can be `nullptr`, and in that case only storage will be allocated. path is here for loading
+    // from a file. But probably won't implement that here.
+    ::VariantTable<RMResourceID16, void *, fs::path> source = (void *)nullptr;
 };
 
 struct TextureInfo {
@@ -333,8 +357,8 @@ struct TextureInfo {
     TexelFetchType::E fetch_type;
     TexelOrigType::E client_type;
 
-    // If this texture is actually a 'view texture', the original texture ('storage' texture) is pointed to by
-    // this id.
+    // If this texture is actually a 'view texture', the original texture ('storage' texture) is pointed
+    // to by this id.
     RMResourceID16 storage_texture = 0;
 
     TextureInfo() = default;
@@ -381,8 +405,8 @@ static constexpr u32 CAMERA_TRANSFORM_UBLOCK_SIZE = sizeof(CameraTransformUB);
 /// Where some shader string can be stored before passing to create_shader_object`. Usually a file.
 using ShaderSourceType = VariantTable<const char *, fs::path>;
 
-// Maximum number of resource views for each type over all shader stages. Set to some non-default value if you
-// want.
+// Maximum number of resource views for each type over all shader stages. Set to some non-default value if
+// you want.
 struct MaxCombinedShaderResourceViews {
     // The max uniform buffer bindpoints is 70 per the spec. The max uniform blocks is however very small
     // compared to that which is 12.
@@ -392,7 +416,8 @@ struct MaxCombinedShaderResourceViews {
     u32 texture_units = 16;
     u32 image_units = 8;
 
-    // Set any of the above limits to one of these values so that we use glGet to retrieve the actual limits
+    // Set any of the above limits to one of these values so that we use glGet to retrieve the actual
+    // limits
     static constexpr u32 IGNORE_AND_GET = 9999;
 };
 
@@ -508,8 +533,8 @@ using VarShaderHandle = ::VariantTable<VertexShaderHandle,
                                        TessEvalShaderHandle,
                                        ComputeShaderHandle>;
 
-// Some useful per FBO info for our purposes will be to know the data type and dimension of each attachment. I
-// should just keep this data in NewFBO instead of creating a separate type..
+// Some useful per FBO info for our purposes will be to know the data type and dimension of each
+// attachment. I should just keep this data in NewFBO instead of creating a separate type..
 struct FboPerAttachmentDim {
     struct AttachmentInfo {
         u16 width = 0;
@@ -627,8 +652,8 @@ struct RenderManager : NonCopyable {
     fo::Array<mesh::StrippedMeshData> _stripped_mesh_datas;
 
     // Path to shader files are kept in a fixed string buffer. Shaders are operated on individually, and a
-    // linked shader program is created only upon seeing if there aren't currently a program already linked
-    // comprising of the given per-stage shaders.
+    // linked shader program is created only upon seeing if there aren't currently a program already
+    // linked comprising of the given per-stage shaders.
     FixedStringBuffer _shader_paths;
     fo::OrderedMap<fo_ss::Buffer, RMResourceID16> _path_to_shader_rmid;
 
@@ -723,6 +748,10 @@ VertexBufferHandle create_vertex_buffer(RenderManager &self, const BufferCreateI
 IndexBufferHandle create_element_array_buffer(RenderManager &self, const BufferCreateInfo &ci);
 PixelPackBufferHandle create_pixel_pack_buffer(RenderManager &self, const BufferCreateInfo &ci);
 PixelUnpackBufferHandle create_pixel_unpack_buffer(RenderManager &self, const BufferCreateInfo &ci);
+
+// -- Texture creation function
+
+Texture2DHandle create_texture_2d(RenderManager &self, const TextureCreateInfo &texture_ci);
 
 struct ShaderDefines; // Fwd
 
@@ -859,9 +888,10 @@ struct TextureLevelCopyRange {
     int dest_level = 0;
 };
 
-// This copies the level of one texture to the level of another texture. This is so named because you can't go
-// directly copy texture levels or even full textures in opengl without first creating a framebuffer and
-// setting the source level as the GL_READ_TARGET. Strange. I will keep a "dummy" FBO for this purpose.
+// This copies the level of one texture to the level of another texture. This is so named because you
+// can't go directly copy texture levels or even full textures in opengl without first creating a
+// framebuffer and setting the source level as the GL_READ_TARGET. Strange. I will keep a "dummy" FBO for
+// this purpose.
 void copy_texture_level_to_texture_level_2D(RMResourceID16 source_texture,
                                             RMResourceID16 dest_texture,
                                             const TextureLevelCopyRange &range);

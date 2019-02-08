@@ -35,100 +35,6 @@ namespace fs = std::experimental::filesystem;
 #    error "Didn't find filesystem namespace"
 #endif
 
-// TODO: Use std::variant in C++17 mode
-
-// optional template
-#ifdef _MSC_VER
-#    include <optional>
-template <typename T> using optional = std::optional<T>;
-constexpr auto nullopt = std::nullopt;
-
-#elif __has_include(<optional>) && __cplusplus >= 201703L
-#    include <optional>
-template <typename T> using optional = std::optional<T>;
-constexpr auto nullopt = std::nullopt;
-
-#elif __has_include(<experimental/optional>)
-#    include <experimental/optional>
-template <typename T> using optional = std::experimental::optional<T>;
-constexpr auto nullopt = std::experimental::nullopt;
-
-#else
-#    include <mapbox/optional.hpp>
-#    define USING_MAPBOX_OPTIONAL
-template <typename T> using optional = mapbox::util::optional<T>;
-constexpr auto nullopt = mapbox::optional();
-
-#endif
-
-#if defined(_MSC_VER)
-#    define NOT_CONSTEXPR_IN_MSVC
-#elif defined(__CLANG__) || defined(__GNUG__)
-#    define NOT_CONSTEXPR_IN_MSVC constexpr
-#endif
-
-// variant template
-
-#if __cplusplus >= 201703L
-#    include <variant>
-template <typename... Types> using variant = std::variant<Types...>;
-#elif __cplusplus <= 201402 && __has_include(<experimental/variant>)
-#    include <experimental/variant>
-template <typename... Types> using variant = std::experimental::variant<Types...>;
-#else
-#    include <mapbox/variant.hpp>
-template <typename... Types> using variant = mapbox::util::variant<Types...>;
-#    define USING_MAPBOX_VARIANT
-#endif
-
-template <typename... Types> inline int type_index(const variant<Types...> &v) {
-#if defined(USING_MAPBOX_VARIANT)
-    return v.which();
-#else
-    return v.index();
-#endif
-}
-
-template <typename T, typename... Types> auto &get_value(variant<Types...> &v) {
-#if defined(USING_MAPBOX_VARIANT)
-    return mapbox::util::get<T>(v);
-#else
-    return std::get<T>(v);
-#endif
-}
-
-template <typename T, typename... Types> auto &get_value(const variant<Types...> &v) {
-#if defined(USING_MAPBOX_VARIANT)
-    return mapbox::util::get<T>(v);
-#else
-    return std::get<T>(v);
-#endif
-}
-
-template <size_t index, typename... Types> auto &get_value(variant<Types...> &v) {
-#if defined(USING_MAPBOX_VARIANT)
-    return mapbox::util::get<index>(v);
-#else
-    return std::get<index>(v);
-#endif
-}
-
-template <size_t index, typename... Types> auto &get_value(const variant<Types...> &v) {
-#if defined(USING_MAPBOX_VARIANT)
-    return mapbox::util::get<index>(v);
-#else
-    return std::get<index>(v);
-#endif
-}
-
-template <typename T> T optional_value(const ::optional<T> &o, T default_value = {}) {
-    return bool(o) ? o.value() : std::move(default_value);
-}
-
-template <typename T> using Maybe = ::optional<T>;
-
-inline constexpr auto MAYBE_NONE = ::nullopt;
-
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
 #define ARRAY_BEGIN(arr) (arr)
 #define ARRAY_END(arr) ((arr) + ARRAY_SIZE(arr))
@@ -164,6 +70,7 @@ namespace fo_ss = fo::string_stream;
 #define LETREF const auto &
 #define VAR auto
 #define TU_LOCAL static
+#define GLOBAL_LAMBDA []
 
 #define DONT_KEEP_INLINED inline
 #define FUNC_PTR(function_name) std::add_pointer_t<decltype(function_name)>
@@ -722,6 +629,21 @@ template <typename Enum, Enum... true_values> struct EnumBool {
 };
 
 #define ENUMSTRUCT struct
+
+template <auto... values> struct OneOf;
+
+template <auto v0, auto... v_rest> struct OneOf<v0, v_rest...> {
+    using T = decltype(v0);
+
+    T _v = v0;
+
+    OneOf(T v)
+        : _v(v) {}
+    OneOf<v0, v_rest...> &operator=(T v) {
+        _v = v;
+        return *this;
+    }
+};
 
 // std::invoke implementation. I don't care about being noexcept.
 

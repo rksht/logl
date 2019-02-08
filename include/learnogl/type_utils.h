@@ -3,6 +3,99 @@
 #include <learnogl/cons.h>
 #include <utility>
 
+// TODO: Use std::variant in C++17 mode
+
+// optional template
+#ifdef _MSC_VER
+#    include <optional>
+template <typename T> using optional = std::optional<T>;
+constexpr auto nullopt = std::nullopt;
+
+#elif __has_include(<optional>) && __cplusplus >= 201703L
+#    include <optional>
+template <typename T> using optional = std::optional<T>;
+constexpr auto nullopt = std::nullopt;
+
+#elif __has_include(<experimental/optional>)
+#    include <experimental/optional>
+template <typename T> using optional = std::experimental::optional<T>;
+constexpr auto nullopt = std::experimental::nullopt;
+
+#else
+#    include <mapbox/optional.hpp>
+#    define USING_MAPBOX_OPTIONAL
+template <typename T> using optional = mapbox::util::optional<T>;
+constexpr auto nullopt = mapbox::optional();
+
+#endif
+
+#if defined(_MSC_VER)
+#    define NOT_CONSTEXPR_IN_MSVC
+#elif defined(__CLANG__) || defined(__GNUG__)
+#    define NOT_CONSTEXPR_IN_MSVC constexpr
+#endif
+
+// variant template
+
+#if __cplusplus >= 201703L
+#    include <variant>
+template <typename... Types> using variant = std::variant<Types...>;
+#elif __cplusplus <= 201402 && __has_include(<experimental/variant>)
+#    include <experimental/variant>
+template <typename... Types> using variant = std::experimental::variant<Types...>;
+#else
+#    include <mapbox/variant.hpp>
+template <typename... Types> using variant = mapbox::util::variant<Types...>;
+#    define USING_MAPBOX_VARIANT
+#endif
+
+template <typename... Types> inline int type_index(const variant<Types...> &v) {
+#if defined(USING_MAPBOX_VARIANT)
+    return v.which();
+#else
+    return v.index();
+#endif
+}
+
+template <typename T, typename... Types> auto &get_value(variant<Types...> &v) {
+#if defined(USING_MAPBOX_VARIANT)
+    return mapbox::util::get<T>(v);
+#else
+    return std::get<T>(v);
+#endif
+}
+
+template <typename T, typename... Types> auto &get_value(const variant<Types...> &v) {
+#if defined(USING_MAPBOX_VARIANT)
+    return mapbox::util::get<T>(v);
+#else
+    return std::get<T>(v);
+#endif
+}
+
+template <size_t index, typename... Types> auto &get_value(variant<Types...> &v) {
+#if defined(USING_MAPBOX_VARIANT)
+    return mapbox::util::get<index>(v);
+#else
+    return std::get<index>(v);
+#endif
+}
+
+template <size_t index, typename... Types> auto &get_value(const variant<Types...> &v) {
+#if defined(USING_MAPBOX_VARIANT)
+    return mapbox::util::get<index>(v);
+#else
+    return std::get<index>(v);
+#endif
+}
+
+template <typename T> T optional_value(const ::optional<T> &o, T default_value = {}) {
+    return bool(o) ? o.value() : std::move(default_value);
+}
+
+template <typename T> using Maybe = ::optional<T>;
+
+inline constexpr auto MAYBE_NONE = ::nullopt;
 
 // A mask for specifying a contiguous range of bits in an integer
 template <unsigned start_bit, unsigned size, typename Int = uint64_t> struct IntMask {
@@ -198,6 +291,17 @@ template <typename... Types> struct VariantTable : public ::variant<Types...> {
         Base::operator=(t);
         return *this;
     }
+
+    // Returns the type index. Don't use this directly.
+    auto type_index() const { return ::type_index(*this); }
+
+    // Returns true if current subtype equals given SubType
+    template <typename SubType> bool contains_subtype() const { return index<SubType> == type_index(); }
+
+    // Returns reference to contained subtype if it indeed is containing an object of that subtype. Throws
+    // otherwise.
+    template <typename SubType> SubType &get_value() { return ::get_value<SubType>(*this); }
+    template <typename SubType> const SubType &get_value() const { return ::get_value<SubType>(*this); }
 };
 
 template <typename VariantTableInstance, typename SubType>
@@ -206,6 +310,13 @@ constexpr size_t vt_index = VariantTableInstance::template index<SubType>;
 #    define VT_SWITCH(variant_object) switch (type_index(variant_object))
 #    define VT_CASE(variant_object, sub_type_desired)                                                        \
     case vt_index<strip_type_t<decltype(variant_object)>, sub_type_desired>
+
+// Returns index of the sub type, given a variant object. This is a shorthand so that you don't have to use
+// decltype, and usually VariantTable type names are long.
+#    define VT_INDEX(variant_object, sub_type_desired)                                                       \
+        vt_index<strip_type_t<decltype(variant_object)>, sub_type_desired>
+
+#    define VT_TYPE_EQUAL(variant_object, sub_type_desired) (VT_INDEX(variant_object, sub_type_desired) == ::type_index()
 
 #endif
 
@@ -229,4 +340,3 @@ template <typename T> using strip_type_t = typename StripType<T>::type;
                                                                                                              \
         struct_name(const struct_name &) = default;                                                          \
     }
-

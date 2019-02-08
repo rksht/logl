@@ -5,7 +5,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 if(MSVC)
 else()
-  add_compile_options(-march=native -fmax-errors=1)
+  add_compile_options(-march=native)
 endif()
 add_compile_options("-DSOURCE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}\"")
 

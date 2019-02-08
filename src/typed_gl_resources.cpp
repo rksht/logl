@@ -1,4 +1,6 @@
+#include <learnogl/dds_loader.h>
 #include <learnogl/shader.h>
+#include <learnogl/stb_image.h>
 #include <learnogl/typed_gl_resources.h>
 
 #include <scaffold/ordered_map.h>
@@ -190,22 +192,24 @@ BlendFunctionDescId create_blendfunc_state(RenderManager &self, const BlendFunct
     return BlendFunctionDescId{ u16(fo::size(self._cached_blendfunc_states) - 1) };
 }
 
+constexpr u32 num_texel_type_configs =
+    TexelOrigType::numbits * TexelComponents::numbits * TexelInterpretType::numbits;
+
 // clang-format off
-inline constexpr auto gen_external_format_table() {
-    // static constexpr u32 num_types = log2_ceil(TexelOrigType::COUNT) + log2_ceil(TexelComponents::COUNT);
-
-    constexpr auto left_shift = ENUM_BITS(TexelOrigType);
-
-    constexpr u32 num_unique_client_types =
-        TexelOrigType::numbits * TexelComponents::numbits * TexelInterpretType::numbits;
-
-    CexprSparseArray<GLExternalFormat, num_unique_client_types> types;
+constexpr CexprSparseArray<GLExternalFormat, num_texel_type_configs> texel_info_to_gl_external_format = GLOBAL_LAMBDA {
+    CexprSparseArray<GLExternalFormat, num_texel_type_configs> types;
 
     // Unnormalized fetches
     types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RED, GL_FLOAT });
     types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT, TexelComponents::RG, TexelInterpretType::UNNORMALIZED),{ GL_RG, GL_FLOAT });
     types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB, GL_FLOAT });
     types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED),{ GL_RGBA, GL_FLOAT });
+
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RED, GL_HALF_FLOAT });
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RG, GL_HALF_FLOAT });
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RGB, GL_HALF_FLOAT });
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RGBA, GL_HALF_FLOAT });
+
     types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RED_INTEGER, GL_UNSIGNED_BYTE });
     types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::RG, TexelInterpretType::UNNORMALIZED), { GL_RG_INTEGER, GL_UNSIGNED_BYTE });
     types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB_INTEGER, GL_UNSIGNED_BYTE });
@@ -236,7 +240,58 @@ inline constexpr auto gen_external_format_table() {
     // rendering. As such it doesn't make sense to generate an external format for it.
 
     return types;
-}
+}();
+
+constexpr CexprSparseArray<GLInternalFormat, num_texel_type_configs> texel_info_to_gl_internal_format = GLOBAL_LAMBDA {
+    CexprSparseArray<GLInternalFormat, num_texel_type_configs> types;
+
+    // Unnormalized fetches
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT, TexelComponents::R, TexelInterpretType::UNNORMALIZED), {GL_R32F});
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT, TexelComponents::RG, TexelInterpretType::UNNORMALIZED),{ GL_RG32F});
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB32F });
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED),{ GL_RGBA32F });
+
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_R16F});
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RG16F });
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RGB16F });
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RGB32F });
+
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_R8UI});
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::RG, TexelInterpretType::UNNORMALIZED), { GL_RG8UI });
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB8UI  });
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED), { GL_RGBA8UI });
+
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_R16UI});
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::RG, TexelInterpretType::UNNORMALIZED), { GL_RG16UI });
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB16UI });
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED), { GL_RGBA16UI });
+
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_R32UI });
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::RG, TexelInterpretType::UNNORMALIZED), { GL_RG32UI});
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB32UI});
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED), { GL_RGBA32UI });
+
+    // Normalized fetches
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::R, TexelInterpretType::NORMALIZED), { GL_R8 });
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::RG, TexelInterpretType::NORMALIZED), { GL_RG8 });
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::RGB, TexelInterpretType::NORMALIZED), { GL_RGB8 });
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::RGBA, TexelInterpretType::NORMALIZED), {GL_RGBA8 });
+
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::R, TexelInterpretType::NORMALIZED), { GL_R16});
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::RG, TexelInterpretType::NORMALIZED), { GL_RG16 });
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::RGB, TexelInterpretType::NORMALIZED), { GL_RGB16 });
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::RGBA, TexelInterpretType::NORMALIZED), { GL_RGBA16 });
+
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::R, TexelInterpretType::NORMALIZED), { GL_R32UI });
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::RG, TexelInterpretType::NORMALIZED), { GL_RG32UI });
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::RGB, TexelInterpretType::NORMALIZED), { GL_RGB32UI });
+    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::RGBA, TexelInterpretType::NORMALIZED), { GL_RGBA32UI });
+
+    // Note that depth textures usually are never provided by the application but received as a result of a
+    // rendering. As such it doesn't make sense to generate an external format for it.
+
+    return types;
+}();
 
 // clang-format on
 
@@ -256,7 +311,101 @@ constexpr bool fetch_and_client_compatible(TexelOrigType::E client_type,
     return ok;
 }
 
-reallyconst gl_texel_client_type_table = gen_external_format_table();
+Texture2DHandle create_texture_2d(RenderManager &self, const TextureCreateInfo &texture_ci) {
+    void *source = nullptr;
+
+    GLuint gl_handle = 0;
+
+    glGenTextures(1, &gl_handle);
+    glBindTexture(GL_TEXTURE_2D, gl_handle);
+
+    const auto texel_info = texture_ci.texel_info;
+
+    const auto encoded_texel_info =
+        _ENCODE_TEXEL_INFO(texel_info.internal_type, texel_info.components, texel_info.interpret_type);
+
+    GLInternalFormat internal_format = texel_info_to_gl_internal_format.get_maybe_nil(encoded_texel_info);
+    if (internal_format.e == 0) {
+        ABORT_F("Not a valid texel info");
+        print_callstack();
+    }
+
+    GLExternalFormat external_format = texel_info_to_gl_external_format.get_maybe_nil(encoded_texel_info);
+
+    if (external_format.components == 0 && external_format.component_type == 0) {
+        ABORT_F("Not a valid texel info - no corresponding external format");
+    }
+
+    if (texture_ci.source.contains_subtype<void *>()) {
+        source = texture_ci.source.get_value<void *>();
+
+        glTexStorage2D(
+            GL_TEXTURE_2D, texture_ci.mips, internal_format.e, texture_ci.width, texture_ci.height);
+
+        if (texture_ci.mips > 1 && source != nullptr) {
+            ABORT_F("Not suppporting initializing mips using a single source");
+        }
+
+        if (source != nullptr) {
+            glTexSubImage2D(GL_TEXTURE_2D,
+                            0,
+                            0,
+                            0,
+                            texture_ci.width,
+                            texture_ci.height,
+                            external_format.components,
+                            external_format.component_type,
+                            source);
+        }
+
+    } else if (texture_ci.source.contains_subtype<fs::path>()) {
+        const fs::path &file_path = texture_ci.source.get_value<fs::path>();
+        const auto str_file = file_path.u8string();
+
+        if (!fs::exists(file_path)) {
+            ABORT_F("Failed to load image - file does not exist - '%s'", str_file.c_str());
+        }
+
+        if (file_path.extension() == "png") {
+            int w = 0, h = 0, channels_in_file = 0;
+            int expected_channels = num_channels_for_components(texel_info.components);
+
+            u8 *image = stbi_load(str_file.c_str(), &w, &h, &channels_in_file, expected_channels);
+
+            if (channels_in_file != expected_channels) {
+                ABORT_F("Failed to load png - '%s' - expected num channels = %i, but image has - %i",
+                        str_file.c_str(),
+                        expected_channels,
+                        channels_in_file);
+            }
+
+            if (!image) {
+                ABORT_F("Failed to load png - '%s' for some reason idk", str_file.c_str());
+            }
+
+            // Load
+            //
+            glTexSubImage2D(GL_TEXTURE_2D,
+                            0,
+                            0,
+                            0,
+                            texture_ci.width,
+                            texture_ci.height,
+                            external_format.components,
+                            external_format.component_type,
+                            image);
+
+        } else if (file_path.extension() == "dds") {
+            dds::load_texture(file_path, gl_handle, nullptr, &fo::memory_globals::default_allocator());
+        } else {
+            ABORT_F("Unrecognized texture file extension");
+        }
+    }
+
+    RMResourceID16 rmid16 = new_resource_id(self);
+
+    // Store texture info and return the resource-id
+}
 
 void init_render_manager(RenderManager &self, const RenderManagerInitConfig &conf) {
     // Create a camera transform uniform buffer

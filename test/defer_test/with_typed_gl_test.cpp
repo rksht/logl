@@ -12,6 +12,21 @@
 
 using namespace eng::math;
 
+// The world bounds are specified in this record
+struct SphereWorld {
+	f32 radius_in_meters = 100;
+	f32 pixels_per_meter = 40;
+};
+
+// Size, position, orientation of a single sphere.
+struct SphereInstance {
+	fo::Vector3 position;
+	f32 radius;
+	fo::Quaternion orientation; // Orientation's effect is only apparent with texturing.
+
+	eng::BoundingSphere pos_radius() const { return { position, radius }; }
+};
+
 TU_LOCAL eng::StartGLParams glparams = [] {
 	eng::StartGLParams glparams;
 	glparams.window_width = 1366;
@@ -29,13 +44,15 @@ TU_LOCAL fo::StringId64 debug_grid_pass("debug_grid_pass");
 TU_LOCAL fo::StringId64 simple_forward_pass("simple_forward_pass");
 
 struct App {
+	fo::Vector<SphereInstance> sphere_instances;
+
 	fo::Vector<fo::Vector3> point_light_positions;
 	fo::Vector<fo::Vector3> point_light_intensties;
 	fo::Vector<fo::Vector3> point_light_influence_distance;
 
-	eng::VertexArrayHandle vao_handle;		 // Usual pos-normal-uv-tangent vao
-	eng::VertexBufferDeleter sphere_mesh_vb; // Sphere mesh vertex buffer
-	eng::IndexBufferDeleter sphere_mesh_ib;  // Sphere mesh index buffer
+	eng::VertexArrayHandle vao_handle;		// Usual pos-normal-uv-tangent vao
+	eng::VertexBufferHandle sphere_mesh_vb; // Sphere mesh vertex buffer
+	eng::IndexBufferHandle sphere_mesh_ib;  // Sphere mesh index buffer
 
 	// Shaders and programs for the record pass
 	eng::ShaderProgramHandle gbuffer_recorder_vsfs;
@@ -47,7 +64,7 @@ struct App {
 	eng::ShaderProgramHandle lighting_pass_fs;
 
 	// An ssbo for storing the attributes of each sphere.
-	eng::ShaderStorageBufferDeleter sphere_attributes_ssbo;
+	eng::ShaderStorageBufferHandle sphere_attributes_ssbo;
 
 	struct RenderStates {
 		eng::BlendFunctionDescId blend_func;
@@ -55,35 +72,39 @@ struct App {
 		eng::RasterizerStateId raster;
 	};
 
-	fo::PodHash<fo::StringId64, RenderStates> render_state_for;
-
-	App() = default;
+	fo::PodHash<fo::StringId64, RenderStates> render_state_for =
+	  fo::make_pod_hash<fo::StringId64, RenderStates>(fo::memory_globals::default_allocator());
 };
+
+void init_gl_objects(App &a)
+{
+	// Create the gbuffer. Normal, uv, diffuse color.
+	//
+
+	// Normal
+	eng::TextureCreateInfo normal_ci;
+	normal_ci.width = glparams.window_width;
+	normal_ci.height = glparams.window_height;
+	normal_ci.texel_info.internal_type = eng::TexelOrigType::FLOAT16;
+	normal_ci.texel_info.interpret_type = eng::TexelInterpretType::UNNORMALIZED;
+	normal_ci.texel_info.components = eng::TexelComponents::RGB;
+
+	eng::create_texture(g_rm(), normal_ci);
+}
 
 namespace app_loop
 {
-	template <> void init<App>(App &a);
-	template <> void update<App>(App &app, State &state);
+	template <> void init<App>(App &a) { init_gl_objects(a); }
 
-	template <> void render<App>(App &a);
-	template <> bool should_close<App>(App &a);
-	template <> void close<App>(App &a);
+	template <> void update<App>(App &app, State &state) {}
+
+	template <> void render<App>(App &a) {}
+
+	template <> bool should_close<App>(App &a) {}
+
+	template <> void close<App>(App &a) {}
+
 } // namespace app_loop
-
-// The world bounds are specified in here.
-struct SphereWorld {
-	f32 radius_in_meters = 100;
-	f32 pixels_per_meter = 40;
-};
-
-// Size, position, orientation of a single sphere.
-struct SphereInstance {
-	fo::Vector3 position;
-	f32 radius;
-	fo::Quaternion orientation; // Orientation's effect is only apparent with texturing.
-
-	eng::BoundingSphere pos_radius() const { return { position, radius }; }
-};
 
 auto path_to_world_file(u32 num_spheres, u32 num_lights)
 {
@@ -229,6 +250,8 @@ int main_generate_sphere_world(GenerateSceneInfo gen_scene_info)
 								   instance.orientation.z,
 								   instance.orientation.w }));
 
+			nfcd_set(&cd, instance_loc, "radius", nfcd_add_number(&cd, instance.radius));
+
 			nfcd_push(&cd, sphere_instances_arr_loc, instance_loc);
 
 			LOG_F(INFO, "i = %u", i);
@@ -274,9 +297,59 @@ int main_render(int ac, char **av)
 		ABORT_F("File %s does not exist", file_path.u8string().c_str());
 	}
 
+	App app;
+
 	// Read scene file
-    
-    return 0;
+	{
+		nfcd_ConfigData *cd = simple_parse_file(file_path.u8string().c_str(), true);
+		nfcd_loc root = nfcd_root(cd);
+
+		nfcd_loc scene_radius_loc = nfcd_object_lookup(cd, root, "scene_radius");
+		f32 scene_radius = SimpleParse<f32>::parse(cd, scene_radius_loc);
+
+		nfcd_loc scene_center_loc = nfcd_object_lookup(cd, root, "scene_center");
+		fo::Vector3 scene_center = SimpleParse<fo::Vector3>::parse(cd, scene_center_loc);
+
+		nfcd_loc spheres_array_loc = nfcd_object_lookup(cd, root, "sphere_instances");
+
+		fo::Vector<SphereInstance> sphere_instances;
+		u32 num_spheres = nfcd_array_size(cd, spheres_array_loc);
+		fo::reserve(sphere_instances, num_spheres);
+
+		for (u32 i = 0; i < num_spheres; ++i) {
+			nfcd_loc sphere_instance_loc = nfcd_array_item(cd, spheres_array_loc, (int)i);
+
+			nfcd_loc position_loc = nfcd_object_lookup(cd, sphere_instance_loc, "position");
+			nfcd_loc orientation_loc = nfcd_object_lookup(cd, sphere_instance_loc, "orientation");
+			nfcd_loc radius_loc = nfcd_object_lookup(cd, sphere_instance_loc, "radius");
+
+			SphereInstance s = ::push_back_get(sphere_instances, {});
+			s.position = SimpleParse<fo::Vector3>::parse(cd, position_loc);
+			fo::Vector4 orientation = SimpleParse<fo::Vector4>::parse(cd, orientation_loc);
+			s.orientation = { orientation.x, orientation.y, orientation.z, orientation.w };
+			s.radius = SimpleParse<f32>::parse(cd, radius_loc);
+		}
+
+		fo::Vector<fo::Vector3> light_positions;
+
+		nfcd_loc light_pos_array_loc = nfcd_object_lookup(cd, root, "light_positions");
+		u32 num_lights = nfcd_array_size(cd, light_pos_array_loc);
+
+		fo::reserve(light_positions, num_lights);
+
+		for (u32 i = 0; i < num_lights; ++i) {
+			nfcd_loc position_loc = nfcd_array_item(cd, light_pos_array_loc, (int)i);
+			fo::push_back(light_positions, SimpleParse<fo::Vector3>::parse(cd, position_loc));
+		}
+
+		app.sphere_instances = std::move(sphere_instances);
+		app.point_light_positions = std::move(light_positions);
+	}
+
+	app_loop::State loop_state = {};
+	app_loop::run(app, loop_state);
+
+	return 0;
 }
 
 int main_generate(int ac, char **av)
