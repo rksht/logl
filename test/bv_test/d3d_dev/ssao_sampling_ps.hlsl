@@ -45,7 +45,7 @@ Texture2D<float4> rnd_xy_vector_texture : register(t2);
 SamplerState point_sampler : register(s0);
 SamplerState random_directions_sampler : register(s1);
 
-float frag_z_wrt_view_space(float2 near_plane_point, float2 tex)
+float frag_z_wrt_view_space(float2 tex)
 {
 	const float zrange = g_far_z - g_near_z;
 	const float A = proj[2][2];
@@ -58,7 +58,7 @@ float frag_z_wrt_view_space(float2 near_plane_point, float2 tex)
 
 float3 frag_pos_wrt_view_space(float2 near_plane_point, float2 tex)
 {
-	float frag_z = frag_z_wrt_view_space(near_plane_point, tex);
+	float frag_z = frag_z_wrt_view_space(tex);
 
 	// Get view space xy of the fragment using similar triangles argument.
 	float3 pos = float3(near_plane_point * frag_z / g_near_z, frag_z);

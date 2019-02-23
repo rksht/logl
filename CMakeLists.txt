@@ -118,8 +118,6 @@ set(rel_include_dirs
     # "liquidfun/liquidfun/Box2D"
 )
 
-add_library(loguru third/loguru/loguru.cpp third/loguru/loguru.hpp)
-
 ex_prepend_to_each("${rel_include_dirs}" "${PROJECT_SOURCE_DIR}/third/"
                    third_party_include_dirs)
 
@@ -178,6 +176,11 @@ if (${msvc})
 endif()
 
 disable_unwanted_warnings()
+
+# Required by Loguru until they add dllexports to their code or add a
+# cmakelists doing this thing.
+set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS true)
+add_library(loguru third/loguru/loguru.cpp third/loguru/loguru.hpp)
 
 add_subdirectory(scripts)
 add_subdirectory(src)
