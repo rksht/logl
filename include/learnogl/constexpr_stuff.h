@@ -23,8 +23,8 @@ struct CexprSparseArray {
     T nil_value;
 
     struct Item {
-        IndexType index;
-        T value;
+        IndexType index = nil;
+        T value = {};
     };
 
     Item items[HASH_SLOTS];
@@ -117,8 +117,10 @@ constexpr auto gen_cexpr_sparse_array(FirstKey key, FirstValue value, Rest... ar
 }
 
 template <typename T, size_t MaxKeys, typename IndexType, IndexType nil, typename... Args>
-constexpr void add_cexpr_sparse_array(CexprSparseArray<T, MaxKeys, IndexType, nil> &table, IndexType key,
-                                      T value, Args... args) {
+constexpr void add_cexpr_sparse_array(CexprSparseArray<T, MaxKeys, IndexType, nil> &table,
+                                      IndexType key,
+                                      T value,
+                                      Args... args) {
     table.set(key, value);
     add_cexpr_sparse_array(table, args...);
 }

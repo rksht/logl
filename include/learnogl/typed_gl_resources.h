@@ -341,7 +341,7 @@ struct TextureCreateInfo {
 
     // Source can be `nullptr`, and in that case only storage will be allocated. path is here for loading
     // from a file. But probably won't implement that here.
-    ::VariantTable<RMResourceID16, void *, fs::path> source = (void *)nullptr;
+    ::VariantTable<RMResourceID16, fs::path, u8 *> source = (u8 *)nullptr;
 };
 
 struct TextureInfo {

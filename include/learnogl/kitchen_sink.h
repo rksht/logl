@@ -1,6 +1,7 @@
 #pragma once
 
 #include <learnogl/math_ops.h>
+#include <learnogl/type_utils.h>
 
 #include <scaffold/array.h>
 #include <scaffold/debug.h>

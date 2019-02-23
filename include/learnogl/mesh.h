@@ -11,16 +11,29 @@ using IndexType = u16;
 
 constexpr u32 ATTRIBUTE_NOT_PRESENT = std::numeric_limits<u32>::max();
 
+struct MeshDataOffsetsAndSizes {
+    u32 num_vertices;     // Number of (unique) vertices in the mesh
+    u32 num_faces;        // Number of faces (triangles really) in the mesh
+    u32 packed_attr_size; // The size of each attribute pack
+    u32 position_offset;  // Offset of position attribute data in a pack
+    u32 normal_offset;    // Offset of normal attribute data in a pack
+    u32 tex2d_offset;     // Offset of 2d texcoord attribute data in a pack
+    u32 tangent_offset;   // Offset of tangent attribute data in a pack
+
+    u32 get_vertices_size_in_bytes() const { return num_vertices * packed_attr_size; }
+
+    u32 get_indices_size_in_bytes() const { return num_faces * 3 * sizeof(u16); }
+};
+
+inline bool have_same_attributes(const MeshDataOffsetsAndSizes &mo1, const MeshDataOffsetsAndSizes &mo2) {
+    return mo1.position_offset == mo2.position_offset && mo1.normal_offset == mo2.normal_offset &&
+           mo1.tex2d_offset == mo2.tex2d_offset && mo1.tangent_offset == mo2.tangent_offset;
+}
+
 // Represents the format of 3D triangle-list mesh. All sizes and offsets are in bytes. Can be sourced into vbo
 // and ebo and should be drawn with GL_TRIANGLES.
 struct MeshData {
-    u32 num_vertices;      // Number of (unique) vertices in the mesh
-    u32 num_faces;         // Number of faces in the mesh
-    u32 packed_attr_size;  // The size of each attribute pack
-    u32 position_offset;   // Offset of position attribute data in a pack
-    u32 normal_offset;     // Offset of normal attribute data in a pack
-    u32 tex2d_offset;      // Offset of 2d texcoord attribute data in a pack
-    u32 tangent_offset;    // Offset of tangent attribute data in a pack
+    MeshDataOffsetsAndSizes o;
     u8 *buffer;            // The array of attribute packs
     bool positions_are_2d; // TODO: pack it into `num_vertices` perhaps.
 };
@@ -38,105 +51,41 @@ struct StrippedMeshData {
 
     StrippedMeshData() = default;
 
-    StrippedMeshData(const MeshData &md) {
-        num_vertices = md.num_vertices;
-        num_faces = md.num_faces;
-        packed_attr_size = md.packed_attr_size;
-        position_offset = md.position_offset;
-        normal_offset = md.normal_offset;
-        tex2d_offset = md.tex2d_offset;
-        tangent_offset = md.tangent_offset;
-        positions_are_2d = md.positions_are_2d;
+    StrippedMeshData(const MeshDataOffsetsAndSizes &mdo, bool positions_are_2d = false) {
+        num_vertices = mdo.num_vertices;
+        num_faces = mdo.num_faces;
+        packed_attr_size = mdo.packed_attr_size;
+        position_offset = mdo.position_offset;
+        normal_offset = mdo.normal_offset;
+        tex2d_offset = mdo.tex2d_offset;
+        tangent_offset = mdo.tangent_offset;
+        this->positions_are_2d = positions_are_2d;
     }
 };
 
-// -- Functions on `MeshData`. Just getters here.
-
-#define MESH_DATA_ONLY static_assert(one_of_type_v<M, MeshData, StrippedMeshData>, "")
-
-template <typename M> inline u32 num_vertices(const M &m) {
-    MESH_DATA_ONLY;
-    return m.num_vertices;
-}
-
-template <typename M> inline u32 num_indices(const M &m) {
-    MESH_DATA_ONLY;
-    return m.num_faces * 3;
-}
-
-template <typename M> inline u32 packed_attr_size(const M &m) {
-    MESH_DATA_ONLY;
-    return m.packed_attr_size;
-}
-
-template <typename M> inline u32 vertex_buffer_size(const M &m) {
-    MESH_DATA_ONLY;
-    return m.num_vertices * m.packed_attr_size;
-}
-
-template <typename M> inline u32 indices_offset(const M &m) {
-    MESH_DATA_ONLY;
-    return vertex_buffer_size(m);
-}
-
-template <typename M> inline u32 index_buffer_size(const M &m) {
-    MESH_DATA_ONLY;
-    return m.num_faces * 3 * sizeof(IndexType);
-}
-
-template <typename M> inline u32 total_buffer_size(const M &m) {
-    MESH_DATA_ONLY;
-    return vertex_buffer_size(m) + index_buffer_size(m);
-}
-
-template <typename M> inline const IndexType *indices(const M &m) {
-    MESH_DATA_ONLY;
-    return reinterpret_cast<const IndexType *>(m.buffer + indices_offset(m));
-}
-
-template <typename M> inline IndexType *indices(M &m) {
-    MESH_DATA_ONLY;
-    return reinterpret_cast<IndexType *>(m.buffer + indices_offset(m));
-}
-
-template <typename M> inline const uint8_t *vertices(const M &m) {
-    MESH_DATA_ONLY;
-    return m.buffer;
-}
-
-template <typename M> inline uint8_t *vertices(M &m) {
-    MESH_DATA_ONLY;
-    return m.buffer;
-}
-
-template <typename M> inline bool have_same_attributes(const M &m1, const M &m2) {
-    return m1.position_offset == m2.position_offset && m1.normal_offset == m2.normal_offset &&
-           m1.tex2d_offset == m2.tex2d_offset && m1.tangent_offset == m2.tangent_offset;
-}
-
-#undef MESH_DATA_ONLY
-
 inline StridedIterator<fo::Vector3, false> positions_begin(MeshData &m) {
-    return StridedIterator<fo::Vector3, false>(vertices(m), m.packed_attr_size);
+    return StridedIterator<fo::Vector3, false>(m.buffer, m.o.packed_attr_size);
 }
 
 inline StridedIterator<fo::Vector3, false> positions_end(MeshData &m) {
-    return StridedIterator<fo::Vector3, false>(vertices(m) + m.packed_attr_size * num_vertices(m),
-                                               m.packed_attr_size);
+    return StridedIterator<fo::Vector3, false>(m.buffer + m.o.packed_attr_size * m.o.num_vertices,
+                                               m.o.packed_attr_size);
 }
 
 inline StridedIterator<fo::Vector3, true> positions_begin(const MeshData &m) {
-    return StridedIterator<fo::Vector3, true>(vertices(m), m.packed_attr_size);
+    return StridedIterator<fo::Vector3, true>(m.buffer, m.o.packed_attr_size);
 }
 
 inline StridedIterator<fo::Vector3, true> positions_end(const MeshData &m) {
-    return StridedIterator<fo::Vector3, true>(vertices(m) + m.packed_attr_size * num_vertices(m),
-                                              m.packed_attr_size);
+    return StridedIterator<fo::Vector3, true>(m.buffer + m.o.packed_attr_size * m.o.num_vertices,
+                                              m.o.packed_attr_size);
 }
 
-inline const uint16_t *indices_begin(MeshData &m) { return indices(m); }
+inline const uint16_t *indices_begin(MeshData &m) {
+    return reinterpret_cast<uint16_t *>(m.buffer + m.o.get_vertices_size_in_bytes());
+}
 
-inline const uint16_t *indices_end(MeshData &m) { return indices(m) + num_indices(m); }
+inline const uint16_t *indices_end(MeshData &m) { return indices_begin(m) + m.o.num_faces * 3; }
 
 /// Represents a single model which can contain multiple meshes
 struct Model {
@@ -180,8 +129,11 @@ bool load(Model &m,
 
 // Loads the model and transforms each position, normal and tangent (if present) with the given transform
 // matrix. The linear part of the transform must be an orthogonal matrix therefore.
-bool load_then_transform(
-    Model &m, const char *file_name, fo::Vector2 fill_uv, u32 model_load_flags, const fo::Matrix4x4 &transform);
+bool load_then_transform(Model &m,
+                         const char *file_name,
+                         fo::Vector2 fill_uv,
+                         u32 model_load_flags,
+                         const fo::Matrix4x4 &transform);
 
 // Frees all the mesh buffers of this model. Must not be free already.
 void free_mesh_buffers(Model &m);

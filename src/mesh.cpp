@@ -59,8 +59,6 @@ bool load(Model &m, const char *file_name, Vector2 fill_uv, uint32_t model_load_
           file_name,
           assimp_scene->mNumMeshes,
           assimp_scene->mNumAnimations,
-          assimp_scene->mNumCameras,
-          assimp_scene->mNumLights,
           assimp_scene->mNumMaterials,
           assimp_scene->mNumTextures);
 
@@ -103,21 +101,21 @@ bool load_then_transform(
     }
 
     for (auto &md : m._mesh_array) {
-        for (u32 i = 0; i < num_vertices(md); ++i) {
-            uint8_t *pack = md.buffer + i * md.packed_attr_size;
-            Vector3 *position = (Vector3 *)(pack + md.position_offset);
-            Vector3 *normal = (Vector3 *)(pack + md.normal_offset);
-            Vector4 *tangent = (Vector4 *)(pack + md.tangent_offset);
+        for (u32 i = 0; i < md.o.num_vertices; ++i) {
+            uint8_t *pack = md.buffer + i * md.o.packed_attr_size;
+            Vector3 *position = (Vector3 *)(pack + md.o.position_offset);
+            Vector3 *normal = (Vector3 *)(pack + md.o.normal_offset);
+            Vector4 *tangent = (Vector4 *)(pack + md.o.tangent_offset);
 
-            if (md.position_offset != ATTRIBUTE_NOT_PRESENT) {
+            if (md.o.position_offset != ATTRIBUTE_NOT_PRESENT) {
                 *position = transform * Vector4(*position, 1.0f);
             }
 
-            if (md.normal_offset != ATTRIBUTE_NOT_PRESENT) {
+            if (md.o.normal_offset != ATTRIBUTE_NOT_PRESENT) {
                 *normal = transform * Vector4(*normal, 0.0f);
             }
 
-            if (md.tangent_offset != ATTRIBUTE_NOT_PRESENT) {
+            if (md.o.tangent_offset != ATTRIBUTE_NOT_PRESENT) {
                 Vector3 t = Vector3(*tangent);
                 t = transform * Vector4(t, 0.0f);
                 tangent->x = t.x;
@@ -134,61 +132,61 @@ bool load_then_transform(
 
 void init_mesh_buffer(
     const aiMesh *mesh, mesh::MeshData *info, Allocator *allocator, bool do_fill_uv, Vector2 fill_uv) {
-    info->num_vertices = mesh->mNumVertices;
-    info->num_faces = mesh->mNumFaces;
-    info->position_offset = 0;
-    info->normal_offset = 0;
-    info->tex2d_offset = 0;
-    info->tangent_offset = 0;
+    info->o.num_vertices = mesh->mNumVertices;
+    info->o.num_faces = mesh->mNumFaces;
+    info->o.position_offset = 0;
+    info->o.normal_offset = 0;
+    info->o.tex2d_offset = 0;
+    info->o.tangent_offset = 0;
 
-    CHECK_LT_F(info->num_vertices, std::numeric_limits<u16>::max(),
-               "Mesh cannot be stored using 16 bit indices");
+    CHECK_LT_F(
+        info->o.num_vertices, std::numeric_limits<u16>::max(), "Mesh cannot be stored using 16 bit indices");
 
     // First we calculate the buffer size we need and set up the offsets of
     // each attribute array
-    info->packed_attr_size = 0;
+    info->o.packed_attr_size = 0;
 
     // Don't actually need to check this, it's always true for assimp with the
     // flags we are using.
     if (mesh->HasPositions()) {
-        info->packed_attr_size += sizeof(Vector3);
+        info->o.packed_attr_size += sizeof(Vector3);
     } else {
-        info->position_offset = mesh::ATTRIBUTE_NOT_PRESENT;
+        info->o.position_offset = mesh::ATTRIBUTE_NOT_PRESENT;
     }
 
     if (mesh->HasNormals()) {
-        info->normal_offset = info->packed_attr_size;
-        info->packed_attr_size += sizeof(Vector3);
+        info->o.normal_offset = info->o.packed_attr_size;
+        info->o.packed_attr_size += sizeof(Vector3);
     } else {
-        info->normal_offset = mesh::ATTRIBUTE_NOT_PRESENT;
+        info->o.normal_offset = mesh::ATTRIBUTE_NOT_PRESENT;
     }
 
     if (mesh->HasTextureCoords(0) || do_fill_uv) {
-        info->tex2d_offset = info->packed_attr_size;
-        info->packed_attr_size += sizeof(Vector2);
+        info->o.tex2d_offset = info->o.packed_attr_size;
+        info->o.packed_attr_size += sizeof(Vector2);
     } else {
-        info->tex2d_offset = mesh::ATTRIBUTE_NOT_PRESENT;
+        info->o.tex2d_offset = mesh::ATTRIBUTE_NOT_PRESENT;
     }
 
     if (mesh->HasTangentsAndBitangents()) {
         // xyspoon: This alignment is only here as a safeguard in case we really want to load this Vector4
         // into sse register right from the mesh buffer.
-        uint32_t start = info->packed_attr_size;
+        uint32_t start = info->o.packed_attr_size;
         int mod = start % alignof(Vector4);
         if (mod) {
-            info->packed_attr_size += alignof(Vector4) - mod;
+            info->o.packed_attr_size += alignof(Vector4) - mod;
         }
-        info->tangent_offset = info->packed_attr_size;
-        info->packed_attr_size += sizeof(Vector4);
+        info->o.tangent_offset = info->o.packed_attr_size;
+        info->o.packed_attr_size += sizeof(Vector4);
     } else {
-        info->tangent_offset = mesh::ATTRIBUTE_NOT_PRESENT;
+        info->o.tangent_offset = mesh::ATTRIBUTE_NOT_PRESENT;
     }
 
     // Again, don't need to check this, it's always true.
     assert(mesh->HasFaces());
 
     // Now we copy from assimp into the client mesh's buffer
-    const size_t buffer_size = total_buffer_size(*info);
+    const size_t buffer_size = info->o.get_vertices_size_in_bytes() + info->o.get_indices_size_in_bytes();
     const uint32_t alignment = std::max(alignof(mesh::ForTangentSpaceCalc), size_t(64));
     info->buffer = (unsigned char *)allocator->allocate(buffer_size, alignment);
 
@@ -197,56 +195,56 @@ void init_mesh_buffer(
         Mesh has %u faces
         Packed attributes size = %u bytes
     )",
-          info->num_vertices,
-          info->num_faces,
-          info->packed_attr_size);
+          info->o.num_vertices,
+          info->o.num_faces,
+          info->o.packed_attr_size);
 
     if (mesh->HasPositions()) {
         debug("    Mesh verts have positions");
         Vector3 *position = (Vector3 *)info->buffer;
-        for (unsigned i = 0; i < info->num_vertices; ++i) {
+        for (unsigned i = 0; i < info->o.num_vertices; ++i) {
             const aiVector3D *v = &mesh->mVertices[i];
             position->x = v->x;
             position->y = v->y;
             position->z = v->z;
-            position = (Vector3 *)((char *)position + info->packed_attr_size);
+            position = (Vector3 *)((char *)position + info->o.packed_attr_size);
         }
     }
 
     if (mesh->HasNormals()) {
         debug("    Mesh verts have normals");
-        Vector3 *normal = (Vector3 *)(info->buffer + info->normal_offset);
-        for (unsigned i = 0; i < info->num_vertices; ++i) {
+        Vector3 *normal = (Vector3 *)(info->buffer + info->o.normal_offset);
+        for (unsigned i = 0; i < info->o.num_vertices; ++i) {
             const aiVector3D *v = &mesh->mNormals[i];
             normal->x = v->x;
             normal->y = v->y;
             normal->z = v->z;
-            normal = (Vector3 *)((char *)normal + info->packed_attr_size);
+            normal = (Vector3 *)((char *)normal + info->o.packed_attr_size);
         }
     }
 
     if (mesh->HasTextureCoords(0)) {
         debug("    Mesh verts have texture coordinates");
-        Vector2 *tex2d = (Vector2 *)(info->buffer + info->tex2d_offset);
-        for (unsigned i = 0; i < info->num_vertices; ++i) {
+        Vector2 *tex2d = (Vector2 *)(info->buffer + info->o.tex2d_offset);
+        for (unsigned i = 0; i < info->o.num_vertices; ++i) {
             const aiVector3D *v = &mesh->mTextureCoords[0][i];
             tex2d->x = v->x;
             tex2d->y = v->y;
-            tex2d = (Vector2 *)((char *)tex2d + info->packed_attr_size);
+            tex2d = (Vector2 *)((char *)tex2d + info->o.packed_attr_size);
         }
     } else if (do_fill_uv) {
-        Vector2 *tex2d = (Vector2 *)(info->buffer + info->tex2d_offset);
-        for (unsigned i = 0; i < info->num_vertices; ++i) {
+        Vector2 *tex2d = (Vector2 *)(info->buffer + info->o.tex2d_offset);
+        for (unsigned i = 0; i < info->o.num_vertices; ++i) {
             const aiVector3D *v = &mesh->mTextureCoords[0][i];
             *tex2d = fill_uv;
-            tex2d = (Vector2 *)((char *)tex2d + info->packed_attr_size);
+            tex2d = (Vector2 *)((char *)tex2d + info->o.packed_attr_size);
         }
     }
 
     if (mesh->HasTangentsAndBitangents()) {
         debug("    Mesh verts have tangents and bitangents");
-        Vector4 *tangent_p = (Vector4 *)(info->buffer + info->tangent_offset);
-        for (unsigned i = 0; i < info->num_vertices; ++i) {
+        Vector4 *tangent_p = (Vector4 *)(info->buffer + info->o.tangent_offset);
+        for (unsigned i = 0; i < info->o.num_vertices; ++i) {
             const aiVector3D *tangent = &mesh->mTangents[i];
             const aiVector3D *bitangent = &mesh->mBitangents[i];
             const aiVector3D *normal = &mesh->mNormals[i];
@@ -274,14 +272,14 @@ void init_mesh_buffer(
 
             assert(td.w == -1.0f || td.w == 1.0f);
 
-            tangent_p = (Vector4 *)((char *)tangent_p + info->packed_attr_size);
+            tangent_p = (Vector4 *)((char *)tangent_p + info->o.packed_attr_size);
         }
     }
 
     if (mesh->HasFaces()) {
         debug("    Mesh verts have faces, duh");
-        unsigned short *p = (unsigned short *)(info->buffer + indices_offset(*info));
-        for (unsigned i = 0; i < info->num_faces; ++i, p += 3) {
+        unsigned short *p = (unsigned short *)(info->buffer + info->o.get_indices_size_in_bytes());
+        for (unsigned i = 0; i < info->o.num_faces; ++i, p += 3) {
             const aiFace *face = &mesh->mFaces[i];
             assert(face->mNumIndices == 3 && "Assimp mesh's face doesn't have 3 indices.");
             p[0] = (unsigned short)(face->mIndices[0]);

@@ -564,22 +564,22 @@ void load_cube_mesh(mesh::Model &m,
     auto &md = m._mesh_array[0];
     md.buffer = (uint8_t *)m._buffer_allocator->allocate(vertex_buffer_size + index_buffer_size);
 
-    md.packed_attr_size = (u32)packed_attr_size;
-    md.num_vertices = p->npoints;
-    md.num_faces = p->ntriangles;
+    md.o.packed_attr_size = (u32)packed_attr_size;
+    md.o.num_vertices = p->npoints;
+    md.o.num_faces = p->ntriangles;
 
-    md.position_offset = 0;
-    md.normal_offset = create_normals ? sizeof(Vector3) : mesh::ATTRIBUTE_NOT_PRESENT;
-    md.tex2d_offset = dummy_texcoords ? sizeof(Vector3) * 2 : mesh::ATTRIBUTE_NOT_PRESENT;
-    md.tangent_offset = mesh::ATTRIBUTE_NOT_PRESENT;
+    md.o.position_offset = 0;
+    md.o.normal_offset = create_normals ? sizeof(Vector3) : mesh::ATTRIBUTE_NOT_PRESENT;
+    md.o.tex2d_offset = dummy_texcoords ? sizeof(Vector3) * 2 : mesh::ATTRIBUTE_NOT_PRESENT;
+    md.o.tangent_offset = mesh::ATTRIBUTE_NOT_PRESENT;
 
     // If we want to create normals, we use the direction vector from center of the cube to the vertex
 
     Vector3 center = { 0.0f, 0.0f, 0.0f };
 
-    for (u32 i = 0; i < md.num_vertices; ++i) {
-        auto pos = reinterpret_cast<Vector3 *>(md.buffer + i * md.packed_attr_size);
-        memset(pos, 0, md.packed_attr_size);
+    for (u32 i = 0; i < md.o.num_vertices; ++i) {
+        auto pos = reinterpret_cast<Vector3 *>(md.buffer + i * md.o.packed_attr_size);
+        memset(pos, 0, md.o.packed_attr_size);
         pos->x = p->points[i * 3];
         pos->y = p->points[i * 3 + 1];
         pos->z = p->points[i * 3 + 2];
@@ -589,11 +589,12 @@ void load_cube_mesh(mesh::Model &m,
         // LOG_F(INFO, "Pos = [%f, %f, %f]", XYZ(pos[0]));
     }
 
-    center = center / float(md.num_vertices); // Center of mass
+    center = center / float(md.o.num_vertices); // Center of mass
 
     if (create_normals) {
-        for (u32 i = 0; i < md.num_vertices; ++i) {
-            auto normal = reinterpret_cast<Vector3 *>(md.buffer + i * md.packed_attr_size + md.normal_offset);
+        for (u32 i = 0; i < md.o.num_vertices; ++i) {
+            auto normal =
+                reinterpret_cast<Vector3 *>(md.buffer + i * md.o.packed_attr_size + md.o.normal_offset);
             normal->x = p->normals[i * 3];
             normal->y = p->normals[i * 3 + 1];
             normal->z = p->normals[i * 3 + 2];
@@ -609,7 +610,7 @@ void load_cube_mesh(mesh::Model &m,
         };
         // Z positive
         u32 i = 0;
-        auto pack = reinterpret_cast<PackedAttrFormat *>(md.buffer + i * md.packed_attr_size);
+        auto pack = reinterpret_cast<PackedAttrFormat *>(md.buffer + i * md.o.packed_attr_size);
         // Recheck this
         for (u32 j = 0; j < 6; ++j) {
             pack[i++].st = Vector2{ 1.0f, 0.0f };
@@ -621,7 +622,7 @@ void load_cube_mesh(mesh::Model &m,
         }
     }
 
-    memcpy(mesh::indices(md), p->triangles, md.num_faces * 3 * sizeof(u16));
+    memcpy((void *)mesh::indices_begin(md), (void *)p->triangles, md.o.num_faces * 3 * sizeof(u16));
 }
 
 void load_sphere_mesh(mesh::Model &m, int slices, int stacks, const fo::Matrix4x4 &transform) {
@@ -647,17 +648,17 @@ void load_sphere_mesh(mesh::Model &m, int slices, int stacks, const fo::Matrix4x
     auto &md = m._mesh_array[0];
     md.buffer = (uint8_t *)m._buffer_allocator->allocate(vertex_buffer_size + index_buffer_size);
 
-    md.packed_attr_size = sizeof(PackedAttrFormat);
-    md.num_vertices = p->npoints;
-    md.num_faces = p->ntriangles;
+    md.o.packed_attr_size = sizeof(PackedAttrFormat);
+    md.o.num_vertices = p->npoints;
+    md.o.num_faces = p->ntriangles;
 
-    md.position_offset = 0;
-    md.normal_offset = offsetof(PackedAttrFormat, normal);
-    md.tex2d_offset = offsetof(PackedAttrFormat, st);
-    md.tangent_offset = mesh::ATTRIBUTE_NOT_PRESENT;
+    md.o.position_offset = 0;
+    md.o.normal_offset = offsetof(PackedAttrFormat, normal);
+    md.o.tex2d_offset = offsetof(PackedAttrFormat, st);
+    md.o.tangent_offset = mesh::ATTRIBUTE_NOT_PRESENT;
 
     // Fill the vertex data for each vertex
-    for (u32 i = 0; i < md.num_vertices; ++i) {
+    for (u32 i = 0; i < md.o.num_vertices; ++i) {
         auto attr = reinterpret_cast<PackedAttrFormat *>(md.buffer + i * sizeof(PackedAttrFormat));
         attr->pos.x = p->points[i * 3];
         attr->pos.y = p->points[i * 3 + 1];
@@ -675,7 +676,7 @@ void load_sphere_mesh(mesh::Model &m, int slices, int stacks, const fo::Matrix4x
         attr->st.y = p->tcoords[i * 2 + 1];
     }
 
-    memcpy(mesh::indices(md), p->triangles, md.num_faces * 3 * sizeof(u16));
+    memcpy((void *)mesh::indices_begin(md), p->triangles, md.o.num_faces * 3 * sizeof(u16));
 }
 
 void load_plane_mesh(mesh::Model &m, const fo::Matrix4x4 &transform) {
@@ -712,13 +713,13 @@ void load_plane_mesh(mesh::Model &m, const fo::Matrix4x4 &transform) {
     const u32 index_buffer_size = (u32)(6 * sizeof(uint16_t));
 
     md.buffer = (uint8_t *)m._buffer_allocator->allocate(vertex_buffer_size + index_buffer_size);
-    md.packed_attr_size = sizeof(PackedAttrFormat);
-    md.position_offset = 0;
-    md.normal_offset = offsetof(PackedAttrFormat, normal);
-    md.tex2d_offset = offsetof(PackedAttrFormat, st);
-    md.tangent_offset = mesh::ATTRIBUTE_NOT_PRESENT;
-    md.num_vertices = 4;
-    md.num_faces = 2;
+    md.o.packed_attr_size = sizeof(PackedAttrFormat);
+    md.o.position_offset = 0;
+    md.o.normal_offset = offsetof(PackedAttrFormat, normal);
+    md.o.tex2d_offset = offsetof(PackedAttrFormat, st);
+    md.o.tangent_offset = mesh::ATTRIBUTE_NOT_PRESENT;
+    md.o.num_vertices = 4;
+    md.o.num_faces = 2;
 
     memcpy(md.buffer, data(points), vec_bytes(points));
 
@@ -750,13 +751,13 @@ void load_screen_quad_mesh(mesh::Model &m) {
     memcpy(md.buffer + sizeof(positions), indices, sizeof(indices));
 
     md.positions_are_2d = true;
-    md.num_vertices = 4;
-    md.num_faces = 2;
-    md.position_offset = 0;
-    md.normal_offset = mesh::ATTRIBUTE_NOT_PRESENT;
-    md.tex2d_offset = mesh::ATTRIBUTE_NOT_PRESENT;
-    md.tangent_offset = mesh::ATTRIBUTE_NOT_PRESENT;
-    md.packed_attr_size = sizeof(Vector2);
+    md.o.num_vertices = 4;
+    md.o.num_faces = 2;
+    md.o.position_offset = 0;
+    md.o.normal_offset = mesh::ATTRIBUTE_NOT_PRESENT;
+    md.o.tex2d_offset = mesh::ATTRIBUTE_NOT_PRESENT;
+    md.o.tangent_offset = mesh::ATTRIBUTE_NOT_PRESENT;
+    md.o.packed_attr_size = sizeof(Vector2);
 }
 
 } // namespace eng
@@ -786,25 +787,25 @@ void init_shape_mesh_struct(ShapeMeshes &shape_meshes) {
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
 
-    u32 vbo_size = mesh::vertex_buffer_size(cube[0]) + mesh::vertex_buffer_size(sphere[0]) +
-                   mesh::vertex_buffer_size(plane[0]) + mesh::vertex_buffer_size(screen_quad[0]);
+    u32 vbo_size = cube[0].o.get_vertices_size_in_bytes() + sphere[0].o.get_vertices_size_in_bytes() +
+                   plane[0].o.get_vertices_size_in_bytes() + screen_quad[0].o.get_vertices_size_in_bytes();
 
-    u32 ebo_size = mesh::index_buffer_size(cube[0]) + mesh::index_buffer_size(sphere[0]) +
-                   mesh::index_buffer_size(plane[0]) + mesh::index_buffer_size(screen_quad[0]);
+    u32 ebo_size = cube[0].o.get_indices_size_in_bytes() + sphere[0].o.get_indices_size_in_bytes() +
+                   plane[0].o.get_indices_size_in_bytes() + screen_quad[0].o.get_indices_size_in_bytes();
 
     glBufferData(GL_ARRAY_BUFFER, vbo_size, nullptr, GL_STATIC_DRAW);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, ebo_size, nullptr, GL_STATIC_DRAW);
 
-    CHECK_F(mesh::have_same_attributes(cube[0], sphere[0]));
-    CHECK_F(mesh::have_same_attributes(cube[0], plane[0]));
+    CHECK_F(mesh::have_same_attributes(cube[0].o, sphere[0].o));
+    CHECK_F(mesh::have_same_attributes(cube[0].o, plane[0].o));
 
     // All StrippedMeshData have same attribute offset.
-    shape_meshes.mesh_data = mesh::StrippedMeshData(cube[0]);
+    shape_meshes.mesh_data = mesh::StrippedMeshData(cube[0].o);
 
-    shape_meshes.num_cube_vertices = num_vertices(cube[0]);
-    shape_meshes.num_sphere_vertices = num_vertices(sphere[0]);
-    shape_meshes.num_plane_vertices = num_vertices(plane[0]);
-    shape_meshes.num_screen_quad_vertices = num_vertices(screen_quad[0]);
+    shape_meshes.num_cube_vertices = cube[0].o.num_vertices;
+    shape_meshes.num_sphere_vertices = sphere[0].o.num_vertices;
+    shape_meshes.num_plane_vertices = plane[0].o.num_vertices;
+    shape_meshes.num_screen_quad_vertices = screen_quad[0].o.num_vertices;
 
     // Fill vertex and index buffer and store the offsets into them for each shape.
 
@@ -815,21 +816,21 @@ void init_shape_mesh_struct(ShapeMeshes &shape_meshes) {
 
         u32 bytes_written = 0;
 
-        memcpy(vbo_p + bytes_written, vertices(cube[0]), vertex_buffer_size(cube[0]));
+        memcpy(vbo_p + bytes_written, cube[0].buffer, cube[0].o.get_vertices_size_in_bytes());
         shape_meshes.cube_vbo_offset = bytes_written;
-        bytes_written += vertex_buffer_size(cube[0]);
+        bytes_written += cube[0].o.get_vertices_size_in_bytes();
 
-        memcpy(vbo_p + bytes_written, vertices(sphere[0]), vertex_buffer_size(sphere[0]));
+        memcpy(vbo_p + bytes_written, sphere[0].buffer, sphere[0].o.get_vertices_size_in_bytes());
         shape_meshes.sphere_vbo_offset = bytes_written;
-        bytes_written += vertex_buffer_size(sphere[0]);
+        bytes_written += sphere[0].o.get_vertices_size_in_bytes();
 
-        memcpy(vbo_p + bytes_written, vertices(plane[0]), vertex_buffer_size(plane[0]));
+        memcpy(vbo_p + bytes_written, plane[0].buffer, plane[0].o.get_vertices_size_in_bytes());
         shape_meshes.plane_vbo_offset = bytes_written;
-        bytes_written += vertex_buffer_size(plane[0]);
+        bytes_written += plane[0].o.get_vertices_size_in_bytes();
 
-        memcpy(vbo_p + bytes_written, vertices(screen_quad[0]), vertex_buffer_size(screen_quad[0]));
+        memcpy(vbo_p + bytes_written, screen_quad[0].buffer, screen_quad[0].o.get_vertices_size_in_bytes());
         shape_meshes.screen_quad_vbo_offset = bytes_written;
-        bytes_written += vertex_buffer_size(screen_quad[0]);
+        bytes_written += screen_quad[0].o.get_vertices_size_in_bytes();
 
         glUnmapBuffer(GL_ARRAY_BUFFER);
     }
@@ -840,21 +841,21 @@ void init_shape_mesh_struct(ShapeMeshes &shape_meshes) {
 
         u32 bytes_written = 0;
 
-        memcpy(ebo_p + bytes_written, indices(cube[0]), index_buffer_size(cube[0]));
+        memcpy(ebo_p + bytes_written, indices_begin(cube[0]), cube[0].o.get_indices_size_in_bytes());
         shape_meshes.cube_ebo_offset = bytes_written;
-        bytes_written += index_buffer_size(cube[0]);
+        bytes_written += cube[0].o.get_indices_size_in_bytes();
 
-        memcpy(ebo_p + bytes_written, indices(sphere[0]), index_buffer_size(sphere[0]));
+        memcpy(ebo_p + bytes_written, indices_begin(sphere[0]), sphere[0].o.get_indices_size_in_bytes());
         shape_meshes.sphere_ebo_offset = bytes_written;
-        bytes_written += index_buffer_size(sphere[0]);
+        bytes_written += sphere[0].o.get_indices_size_in_bytes();
 
-        memcpy(ebo_p + bytes_written, indices(plane[0]), index_buffer_size(plane[0]));
+        memcpy(ebo_p + bytes_written, indices_begin(plane[0]), plane[0].o.get_indices_size_in_bytes());
         shape_meshes.plane_ebo_offset = bytes_written;
-        bytes_written += index_buffer_size(plane[0]);
+        bytes_written += plane[0].o.get_indices_size_in_bytes();
 
-        memcpy(ebo_p + bytes_written, indices(screen_quad[0]), index_buffer_size(screen_quad[0]));
+        memcpy(ebo_p + bytes_written, indices_begin(screen_quad[0]), screen_quad[0].o.get_indices_size_in_bytes());
         shape_meshes.screen_quad_ebo_offset = bytes_written;
-        bytes_written += index_buffer_size(screen_quad[0]);
+        bytes_written += screen_quad[0].o.get_indices_size_in_bytes();
 
         glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
     }

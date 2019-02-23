@@ -196,7 +196,7 @@ constexpr u32 num_texel_type_configs =
     TexelOrigType::numbits * TexelComponents::numbits * TexelInterpretType::numbits;
 
 // clang-format off
-constexpr CexprSparseArray<GLExternalFormat, num_texel_type_configs> texel_info_to_gl_external_format = GLOBAL_LAMBDA {
+constexpr CexprSparseArray<GLExternalFormat, num_texel_type_configs> texel_info_to_gl_external_format = []() {
     CexprSparseArray<GLExternalFormat, num_texel_type_configs> types;
 
     // Unnormalized fetches
@@ -312,7 +312,7 @@ constexpr bool fetch_and_client_compatible(TexelOrigType::E client_type,
 }
 
 Texture2DHandle create_texture_2d(RenderManager &self, const TextureCreateInfo &texture_ci) {
-    void *source = nullptr;
+    u8 *source = nullptr;
 
     GLuint gl_handle = 0;
 
@@ -336,8 +336,8 @@ Texture2DHandle create_texture_2d(RenderManager &self, const TextureCreateInfo &
         ABORT_F("Not a valid texel info - no corresponding external format");
     }
 
-    if (texture_ci.source.contains_subtype<void *>()) {
-        source = texture_ci.source.get_value<void *>();
+    if (texture_ci.source.contains_subtype<u8 *>()) {
+        source = texture_ci.source.get_value<u8 *>();
 
         glTexStorage2D(
             GL_TEXTURE_2D, texture_ci.mips, internal_format.e, texture_ci.width, texture_ci.height);
