@@ -17,7 +17,6 @@ if (WIN32)
 	)
 
 	if (D3D11_INCLUDE_PATH)
-		# Find d3d11.lib
 		find_library (D3D11_LIB
 			NAMES d3d11
 			PATHS "${WIN10_SDK_DIR}/Lib/${WIN10_SDK_VERSION}/um/${ARCH}"
@@ -26,8 +25,7 @@ if (WIN32)
 		)
 		
 		if (D3D11_LIB)
-			# Find d3dcompiler.lib
-			set (D3D11_LIBRARIES ${D3D11_LIB})
+			set (D3D11_LIBRARIES "${D3D11_LIB}")
 
 			find_library (D3D_COMPILER_LIB 
 				NAMES d3dcompiler
@@ -37,8 +35,20 @@ if (WIN32)
 			)
 		
 			if (D3D_COMPILER_LIB)
-				set (D3D11_FOUND "YES")
 				set (D3D11_COMPILER_LIBS ${D3D_COMPILER_LIB})
+
+				find_library (DXGUID_LIB
+					NAMES dxguid
+					PATHS "${WIN10_SDK_DIR}/Lib/${WIN10_SDK_VERSION}/um/${ARCH}"
+					NO_DEFAULT_PATH
+					DOC "Path to the windows 10 dxguid.lib file"
+				)
+
+				if (DXGUID_LIB)
+					set (DXGUID_LIB "${DXGUID_LIB}") # Eh?
+					set (D3D11_FOUND "YES")
+				endif()
+
 			endif (D3D_COMPILER_LIB)
 		endif (D3D11_LIB)
 

@@ -50,22 +50,15 @@ in_tests_folder(fluidcs11)
 add_executable(use_shaderc_test use_shaderc_test.cpp)
 target_link_libraries(use_shaderc_test learnogl)
 
-# add_executable(fl_matrixless fl_matrixless.cpp)
-# target_link_libraries(fl_matrixless learnogl)
-# _tests_folder(fl_matrixless)
-
 add_executable(simple_sc_test simple_sc_test.cpp)
 target_link_libraries(simple_sc_test -lasan learnogl)
 in_tests_folder(simple_sc_test)
 
-# add_executable(goof_with_blur goof_with_blur.cpp gaussian_blur_utils.h)
-# target_link_libraries(goof_with_blur learnogl)
-
 add_executable(duk_tryout duk_tryout.cpp)
 target_link_libraries(duk_tryout learnogl)
 
-# add_executable(sound_test sound_test.cpp)
-# target_link_libraries(sound_test learnogl)
-
 add_executable(stams_simple_fluid stams_simple_fluid.cpp)
 target_link_libraries(stams_simple_fluid learnogl)
+
+add_executable(raycast raycast.cpp)
+target_link_libraries(raycast learnogl)

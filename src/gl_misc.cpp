@@ -2,21 +2,21 @@
 #include <glad/glad.h>
 
 #if defined(WIN32)
-#    include <windows.h>
-#    define GLFW_EXPOSE_NATIVE_WGL
-#    define GLFW_EXPOSE_NATIVE_WIN32
+#include <windows.h>
+#define GLFW_EXPOSE_NATIVE_WGL
+#define GLFW_EXPOSE_NATIVE_WIN32
 
-#    define GLFWAPI __declspec(dllimport)
+#define GLFWAPI __declspec(dllimport)
 
 #elif defined(__linux__)
-#    include <dlfcn.h>
-#    define GLFW_EXPOSE_NATIVE_GLX
-#    define GLFW_EXPOSE_NATIVE_X11
+#include <dlfcn.h>
+#define GLFW_EXPOSE_NATIVE_GLX
+#define GLFW_EXPOSE_NATIVE_X11
 
-#    define GLFWAPI __attribute__((visibility("default")))
+#define GLFWAPI __attribute__((visibility("default")))
 
 #else
-#    warning "Unknown platform"
+#warning "Unknown platform"
 
 #endif
 
@@ -534,8 +534,6 @@ void load_cube_mesh(mesh::Model &m,
                     const fo::Matrix4x4 &transform,
                     bool create_normals,
                     bool dummy_texcoords) {
-    assert(create_normals);
-
     par_shapes_mesh *p = par_shapes_create_cube();
 
     DEFERSTAT(par_shapes_free_mesh(p));
@@ -853,7 +851,9 @@ void init_shape_mesh_struct(ShapeMeshes &shape_meshes) {
         shape_meshes.plane_ebo_offset = bytes_written;
         bytes_written += plane[0].o.get_indices_size_in_bytes();
 
-        memcpy(ebo_p + bytes_written, indices_begin(screen_quad[0]), screen_quad[0].o.get_indices_size_in_bytes());
+        memcpy(ebo_p + bytes_written,
+               indices_begin(screen_quad[0]),
+               screen_quad[0].o.get_indices_size_in_bytes());
         shape_meshes.screen_quad_ebo_offset = bytes_written;
         bytes_written += screen_quad[0].o.get_indices_size_in_bytes();
 
@@ -911,7 +911,7 @@ void load_renderdoc(const char *capture_path_template) {
     }
 
 #else
-#    error "Unknown platform"
+#error "Unknown platform"
 #endif
 
     int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, reinterpret_cast<void **>(&g_rdoc));
@@ -954,7 +954,7 @@ void start_renderdoc_frame_capture(GLFWwindow *window) {
     auto native_window = glfwGetGLXWindow(window);
 
 #else
-#    error "Unknown platform"
+#error "Unknown platform"
 #endif
     CHECK_EQ_F(capture_in_progress, false, "Capture already in progress.");
 
@@ -977,7 +977,7 @@ void end_renderdoc_frame_capture(GLFWwindow *window) {
     auto native_window = glfwGetGLXWindow(window);
 
 #else
-#    error "Unknown platform"
+#error "Unknown platform"
 #endif
     CHECK_EQ_F(capture_in_progress, true);
     CHECK_EQ_F(g_rdoc->IsFrameCapturing(), 0u, "Renderdoc not capturing any frame.");

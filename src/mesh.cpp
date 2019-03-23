@@ -1,19 +1,39 @@
+#include <learnogl/gl_misc.h>
+#include <learnogl/kitchen_sink.h>
+
 #include <algorithm>
 #include <assert.h>
 #include <assimp/cimport.h>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
-#include <learnogl/kitchen_sink.h>
-#include <learnogl/math_ops.h>
-#include <learnogl/mesh.h>
-#include <scaffold/debug.h>
+#include <loguru.hpp>
 
 using namespace fo;
+using namespace eng::math;
+
+constexpr u32 max_skeleton_fanout = 5;
+
+using MeshVariant = ::VariantTable<>;
 
 namespace eng {
 
-static void init_mesh_buffer(
-    const aiMesh *mesh, mesh::MeshData *info, Allocator *allocator, bool do_fill_uv, Vector2 fill_uv);
+struct SkeletonNode {
+    std::array<SkeletonNode *, max_skeleton_fanout> children;
+
+    // Bone names are kept in the global fixed string buffer
+    FixedStringBuffer::Index name = {};
+    u32 num_children = 0;
+
+    // Index into array of bone-info
+    i32 bone_index = 0;
+};
+
+TU_LOCAL void init_mesh_buffer(const aiMesh *mesh,
+                               mesh::MeshData *info,
+                               Allocator *allocator,
+                               bool do_fill_uv,
+                               Vector2 fill_uv,
+                               bool load_bones);
 
 namespace mesh {
 
@@ -69,12 +89,15 @@ bool load(Model &m, const char *file_name, Vector2 fill_uv, uint32_t model_load_
 
     resize(m._mesh_array, assimp_scene->mNumMeshes);
 
+    const auto load_bones = !bool(model_load_flags & mesh::IGNORE_BONES);
+
     for (int i = 0; i < assimp_scene->mNumMeshes; ++i) {
         init_mesh_buffer(assimp_scene->mMeshes[i],
                          &m._mesh_array[i],
                          m._buffer_allocator,
                          model_load_flags & ModelLoadFlagBits::FILL_CONST_UV,
-                         fill_uv);
+                         fill_uv,
+                         load_bones);
     }
 
     aiReleaseImport(assimp_scene);
@@ -130,24 +153,31 @@ bool load_then_transform(
 
 } // namespace mesh
 
-void init_mesh_buffer(
-    const aiMesh *mesh, mesh::MeshData *info, Allocator *allocator, bool do_fill_uv, Vector2 fill_uv) {
+void init_mesh_buffer(const aiMesh *mesh,
+                      mesh::MeshData *info,
+                      Allocator *allocator,
+                      bool do_fill_uv,
+                      Vector2 fill_uv,
+                      bool load_bones) {
     info->o.num_vertices = mesh->mNumVertices;
     info->o.num_faces = mesh->mNumFaces;
     info->o.position_offset = 0;
     info->o.normal_offset = 0;
     info->o.tex2d_offset = 0;
     info->o.tangent_offset = 0;
+    info->o.bone_data_offset = 0;
+
+    // TODO: See usage below.
+    fo::Vector<fo::Matrix4x4> offset_transforms;
+    fo::Vector<mesh::AffectingBones> affecting_bones_for_vertex;
 
     CHECK_LT_F(
         info->o.num_vertices, std::numeric_limits<u16>::max(), "Mesh cannot be stored using 16 bit indices");
 
-    // First we calculate the buffer size we need and set up the offsets of
-    // each attribute array
+    // First we calculate the buffer size we need and set up the offsets of each attribute array
     info->o.packed_attr_size = 0;
 
-    // Don't actually need to check this, it's always true for assimp with the
-    // flags we are using.
+    // Don't actually need to check this, it's always true for assimp with the flags we are using.
     if (mesh->HasPositions()) {
         info->o.packed_attr_size += sizeof(Vector3);
     } else {
@@ -182,11 +212,70 @@ void init_mesh_buffer(
         info->o.tangent_offset = mesh::ATTRIBUTE_NOT_PRESENT;
     }
 
+    // Allocate space for bones
+    if (mesh->HasBones() && load_bones) {
+        info->o.bone_data_offset =
+            (info->o.packed_attr_size * info->o.num_vertices) + (info->o.num_faces * 3 * sizeof(uint16_t));
+
+        const auto num_bones = mesh->mNumBones;
+        info->o.num_bones = num_bones;
+
+        // Max chars in bone name is 64. Max bones in model expected to be
+        g_strings().reserve(256, 64);
+
+        // TODO: Allocate the space for bone data in the mesh buffer and copy the data in these vectors
+        // directly into allocated space. Already doing this for the other vertex attributes.
+        fo::resize(offset_transforms, num_bones);
+        fo::resize_with_given(
+            affecting_bones_for_vertex, info->o.num_vertices, mesh::AffectingBones::get_empty());
+
+        for (u32 bone_index = 0; bone_index < num_bones; ++bone_index) {
+            const aiBone *bone = mesh->mBones[bone_index];
+
+            auto name_fstring = g_strings().add(bone->mName.data);
+            DLOG_F(INFO, "Bone number %u is named '%s'", g_strings().get(name_fstring));
+
+            // Offset transform is simply translation. Take that from the matrix.
+            const aiMatrix4x4 assimp_mat = bone->mOffsetMatrix;
+            offset_transforms[bone_index] =
+                fo::Matrix4x4{ unit_x_4,
+                               unit_y_4,
+                               unit_z_4,
+                               fo::Vector4(assimp_mat.a4, assimp_mat.b4, assimp_mat.c4, assimp_mat.d4) };
+
+            // Initialize the affecting bones of given vertex. Assimp stores in the reverse way, i.e. bone to
+            // list of vertices it affects. bones -> [vertices]. We want to store as a mapping from vertex ->
+            // [bones] i.e. vertex to bones affecting it.
+            u32 num_vertices_affected = bone->mNumWeights;
+            for (u32 i = 0; i < num_vertices_affected; ++i) {
+                aiVertexWeight weight = bone->mWeights[i];
+                u32 vertex_id =
+                    (u32)weight.mVertexId; // TODO:CONT: Check assimp docs. Is it unsigned or signed?
+
+                mesh::AffectingBones &affecting_bones = affecting_bones_for_vertex[vertex_id];
+
+                const u32 current_count = affecting_bones.count();
+
+                if (current_count == (i32)mesh::MAX_BONES_AFFECTING_VERTEX) {
+                    ABORT_F("Number of bones affecting vertex %u > MAX_BONES_AFFECTING_VERTEX(=%u)",
+                            vertex_id,
+                            mesh::MAX_BONES_AFFECTING_VERTEX);
+                }
+                affecting_bones.bone_ids[current_count] = bone_index;
+            }
+        }
+
+    } else {
+        info->o.bone_data_offset = mesh::ATTRIBUTE_NOT_PRESENT;
+        info->o.num_bones = 0;
+    }
+
     // Again, don't need to check this, it's always true.
     assert(mesh->HasFaces());
 
     // Now we copy from assimp into the client mesh's buffer
-    const size_t buffer_size = info->o.get_vertices_size_in_bytes() + info->o.get_indices_size_in_bytes();
+    const size_t buffer_size = info->o.get_vertices_size_in_bytes() + info->o.get_indices_size_in_bytes() +
+                               info->o.get_bone_data_size_in_bytes();
     const uint32_t alignment = std::max(alignof(mesh::ForTangentSpaceCalc), size_t(64));
     info->buffer = (unsigned char *)allocator->allocate(buffer_size, alignment);
 
@@ -200,7 +289,7 @@ void init_mesh_buffer(
           info->o.packed_attr_size);
 
     if (mesh->HasPositions()) {
-        debug("    Mesh verts have positions");
+        DLOG_F(INFO, "Mesh verts have positions");
         Vector3 *position = (Vector3 *)info->buffer;
         for (unsigned i = 0; i < info->o.num_vertices; ++i) {
             const aiVector3D *v = &mesh->mVertices[i];
@@ -212,7 +301,7 @@ void init_mesh_buffer(
     }
 
     if (mesh->HasNormals()) {
-        debug("    Mesh verts have normals");
+        DLOG_F(INFO, "Mesh verts have normals");
         Vector3 *normal = (Vector3 *)(info->buffer + info->o.normal_offset);
         for (unsigned i = 0; i < info->o.num_vertices; ++i) {
             const aiVector3D *v = &mesh->mNormals[i];
@@ -242,7 +331,7 @@ void init_mesh_buffer(
     }
 
     if (mesh->HasTangentsAndBitangents()) {
-        debug("    Mesh verts have tangents and bitangents");
+        DLOG_F(INFO, "    Mesh verts have tangents and bitangents");
         Vector4 *tangent_p = (Vector4 *)(info->buffer + info->o.tangent_offset);
         for (unsigned i = 0; i < info->o.num_vertices; ++i) {
             const aiVector3D *tangent = &mesh->mTangents[i];
@@ -277,7 +366,7 @@ void init_mesh_buffer(
     }
 
     if (mesh->HasFaces()) {
-        debug("    Mesh verts have faces, duh");
+        DLOG_F(INFO, "Mesh verts have faces, duh");
         unsigned short *p = (unsigned short *)(info->buffer + info->o.get_indices_size_in_bytes());
         for (unsigned i = 0; i < info->o.num_faces; ++i, p += 3) {
             const aiFace *face = &mesh->mFaces[i];
@@ -289,6 +378,19 @@ void init_mesh_buffer(
             assert(p[1] < (1u << 16) - 1u);
             assert(p[2] < (1u << 16) - 1u);
         }
+    }
+
+    if (mesh->HasBones() && load_bones) {
+        // Copy the bone data first
+        memcpy(info->buffer + info->o.get_affecting_bones_byte_offset(),
+               fo::data(affecting_bones_for_vertex),
+               info->o.get_affecting_bones_size_in_bytes());
+
+        memcpy(info->buffer + info->o.get_offset_transforms_byte_offset(),
+               fo::data(offset_transforms),
+               info->o.get_offset_transform_size_in_bytes());
+
+        // Create the skeleton hierarchy.
     }
 
     info->positions_are_2d = false;

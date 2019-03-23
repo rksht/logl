@@ -42,3 +42,7 @@ else()
   target_link_libraries(image_based_test learnogl_compat)
 endif()
 in_tests_folder(image_based_test)
+
+add_executable(shadow_map_test_new_api shadow_map_test_new_api.cpp shadow_map.h shadow_map.cpp demo_types.h demo_types.cpp)
+  target_link_libraries(shadow_map_test_new_api learnogl)
+in_tests_folder(shadowmap_test)

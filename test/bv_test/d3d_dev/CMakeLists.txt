@@ -4,6 +4,8 @@ add_compile_options("-DSOURCE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}\"" "-DDXERR_LOGU
 
 find_package(D3D11)
 
+message("D3D11_LIBRARIES = ${D3D11_LIBRARIES}, D3D_COMPILER_LIB = ${D3D_COMPILER_LIB}")
+
 set(dx_helper_code d3d11_misc.cpp d3d11_misc.h dxerr.h dxerr.cpp d3d_eye.cpp d3d_eye.h d3d_renderdoc.cpp)
 if (MSVC)
   add_executable(d3d_test d3d_test.cpp ${dx_helper_code})

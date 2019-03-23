@@ -76,7 +76,8 @@ ComPtr<ID3D11Buffer> create_dynamic_cbuffer(size_t size, const char *debug_name 
 
 	ComPtr<ID3D11Buffer> ptr;
 
-	DXASSERT("create_dynamic_cbuffer", d3d11_misc::device()->CreateBuffer(&desc, nullptr, ptr.GetAddressOf()));
+	DXASSERT("create_dynamic_cbuffer",
+			 d3d11_misc::device()->CreateBuffer(&desc, nullptr, ptr.GetAddressOf()));
 
 	if (debug_name) {
 		d3d11_misc::set_debug_name(ptr, debug_name);
@@ -89,7 +90,7 @@ void source_into_constant_buffer(ID3D11Buffer *cb, void *data, size_t size)
 {
 	D3D11_MAPPED_SUBRESOURCE mapped = {};
 	DXASSERT("source_into_constant_buffer",
-					 d3d11_misc::context()->Map(cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped));
+			 d3d11_misc::context()->Map(cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped));
 	memcpy(mapped.pData, data, size);
 	d3d11_misc::context()->Unmap(cb, 0);
 }
@@ -106,11 +107,11 @@ struct SingleMipTexture2D {
 	ID3D11ShaderResourceView *srv() { return _srv.Get(); }
 
 	void create(u32 width,
-							u32 height,
-							DXGI_FORMAT texture_format,
-							DXGI_FORMAT srv_format,
-							const D3D11_SUBRESOURCE_DATA *subdata,
-							const char *debug_name = nullptr)
+				u32 height,
+				DXGI_FORMAT texture_format,
+				DXGI_FORMAT srv_format,
+				const D3D11_SUBRESOURCE_DATA *subdata,
+				const char *debug_name = nullptr)
 	{
 		assert(!is_created());
 
@@ -142,7 +143,8 @@ struct SingleMipTexture2D {
 		srv_desc.Texture2D.MostDetailedMip = 0;
 		srv_desc.Texture2D.MipLevels = 1;
 
-		DXASSERT("", d3d11_misc::device()->CreateShaderResourceView(_tex.Get(), &srv_desc, _srv.GetAddressOf()));
+		DXASSERT("",
+				 d3d11_misc::device()->CreateShaderResourceView(_tex.Get(), &srv_desc, _srv.GetAddressOf()));
 	}
 };
 
@@ -154,11 +156,11 @@ struct RenderTexture2D : SingleMipTexture2D {
 	ID3D11RenderTargetView *rtv() { return _rtv.Get(); }
 
 	void create(u32 width,
-							u32 height,
-							DXGI_FORMAT texture_format,
-							DXGI_FORMAT rtv_format,
-							DXGI_FORMAT srv_format,
-							const char *debug_name = nullptr)
+				u32 height,
+				DXGI_FORMAT texture_format,
+				DXGI_FORMAT rtv_format,
+				DXGI_FORMAT srv_format,
+				const char *debug_name = nullptr)
 	{
 		SingleMipTexture2D::create(width, height, texture_format, srv_format, nullptr, debug_name);
 
@@ -167,7 +169,8 @@ struct RenderTexture2D : SingleMipTexture2D {
 		rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 		rtv_desc.Texture2D.MipSlice = 0;
 
-		DXASSERT("", d3d11_misc::device()->CreateRenderTargetView(_tex.Get(), &rtv_desc, _rtv.GetAddressOf()));
+		DXASSERT("",
+				 d3d11_misc::device()->CreateRenderTargetView(_tex.Get(), &rtv_desc, _rtv.GetAddressOf()));
 	}
 };
 
@@ -179,11 +182,11 @@ struct DepthRenderTexture : SingleMipTexture2D {
 	ID3D11DepthStencilView *dsv() { return _dsv.Get(); }
 
 	void create(u32 width,
-							u32 height,
-							DXGI_FORMAT texture_format,
-							DXGI_FORMAT dsv_format,
-							DXGI_FORMAT srv_format,
-							const char *debug_name = nullptr)
+				u32 height,
+				DXGI_FORMAT texture_format,
+				DXGI_FORMAT dsv_format,
+				DXGI_FORMAT srv_format,
+				const char *debug_name = nullptr)
 	{
 		assert(!is_created());
 
@@ -195,7 +198,8 @@ struct DepthRenderTexture : SingleMipTexture2D {
 		dsv_desc.Flags = 0;
 		dsv_desc.Texture2D.MipSlice = 0;
 
-		DXASSERT("", d3d11_misc::device()->CreateDepthStencilView(_tex.Get(), &dsv_desc, _dsv.GetAddressOf()));
+		DXASSERT("",
+				 d3d11_misc::device()->CreateDepthStencilView(_tex.Get(), &dsv_desc, _dsv.GetAddressOf()));
 	}
 };
 
@@ -224,10 +228,10 @@ struct SsaoTextures {
 	u32 ao_width = 0, ao_height = 0;
 
 	void create(u32 width,
-							u32 height,
-							u32 num_random_xy_vectors,
-							const char *debug_name0 = "@normals_texture",
-							const char *debug_name1 = "@normalized_depth")
+				u32 height,
+				u32 num_random_xy_vectors,
+				const char *debug_name0 = "@normals_texture",
+				const char *debug_name1 = "@normalized_depth")
 	{
 		assert(width % num_random_xy_vectors == 0);
 		assert(height % num_random_xy_vectors == 0);
@@ -238,18 +242,18 @@ struct SsaoTextures {
 		// Create the render targets
 
 		normals.create(width,
-									 height,
-									 DXGI_FORMAT_R16G16B16A16_FLOAT,
-									 DXGI_FORMAT_R16G16B16A16_FLOAT,
-									 DXGI_FORMAT_R16G16B16A16_FLOAT,
-									 debug_name0);
+					   height,
+					   DXGI_FORMAT_R16G16B16A16_FLOAT,
+					   DXGI_FORMAT_R16G16B16A16_FLOAT,
+					   DXGI_FORMAT_R16G16B16A16_FLOAT,
+					   debug_name0);
 
 		normalized_depth.create(width,
-														height,
-														DXGI_FORMAT_R24G8_TYPELESS,
-														DXGI_FORMAT_D24_UNORM_S8_UINT,
-														DXGI_FORMAT_R24_UNORM_X8_TYPELESS,
-														debug_name1);
+								height,
+								DXGI_FORMAT_R24G8_TYPELESS,
+								DXGI_FORMAT_D24_UNORM_S8_UINT,
+								DXGI_FORMAT_R24_UNORM_X8_TYPELESS,
+								debug_name1);
 
 		// ao_width = width / 4;
 		// ao_height = height / 4;
@@ -261,61 +265,64 @@ struct SsaoTextures {
 		const auto OCCLUSION_OUTPUT_FORMAT = DXGI_FORMAT_R16_FLOAT;
 
 		occlusion_factor_output.create(ao_width,
-																	 ao_height,
-																	 OCCLUSION_OUTPUT_FORMAT,
-																	 OCCLUSION_OUTPUT_FORMAT,
-																	 OCCLUSION_OUTPUT_FORMAT,
-																	 "@ao_output_texture");
+									   ao_height,
+									   OCCLUSION_OUTPUT_FORMAT,
+									   OCCLUSION_OUTPUT_FORMAT,
+									   OCCLUSION_OUTPUT_FORMAT,
+									   "@ao_output_texture");
 
 		blurred_output_0.create(ao_width,
-														ao_height,
-														OCCLUSION_OUTPUT_FORMAT,
-														OCCLUSION_OUTPUT_FORMAT,
-														OCCLUSION_OUTPUT_FORMAT,
-														"@ao_blur_0");
+								ao_height,
+								OCCLUSION_OUTPUT_FORMAT,
+								OCCLUSION_OUTPUT_FORMAT,
+								OCCLUSION_OUTPUT_FORMAT,
+								"@ao_blur_0");
 
 		blurred_output_1.create(ao_width,
-														ao_height,
-														OCCLUSION_OUTPUT_FORMAT,
-														OCCLUSION_OUTPUT_FORMAT,
-														OCCLUSION_OUTPUT_FORMAT,
-														"@ao_blur_1");
+								ao_height,
+								OCCLUSION_OUTPUT_FORMAT,
+								OCCLUSION_OUTPUT_FORMAT,
+								OCCLUSION_OUTPUT_FORMAT,
+								"@ao_blur_1");
 
 		// Create the samplers.
 		{
-			// Usual normals and depth texture sampler. @comeback - Should be using border here with the max depth
-			// value so that there is no occlusion based darkening at the edges of the screen.
+			// Usual normals and depth texture sampler. @comeback - Should be using border here with the max
+			// depth value so that there is no occlusion based darkening at the edges of the screen.
 			CD3D11_SAMPLER_DESC csamplerdesc(CD3D11_DEFAULT{});
 			csamplerdesc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
-			csamplerdesc.AddressU = csamplerdesc.AddressV = csamplerdesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+			csamplerdesc.AddressU = csamplerdesc.AddressV = csamplerdesc.AddressW =
+			  D3D11_TEXTURE_ADDRESS_CLAMP;
 
 			D3D11_SAMPLER_DESC samplerdesc = (D3D11_SAMPLER_DESC)csamplerdesc;
 
 			DXASSERT("CreateSamplerState",
-							 d3d11_misc::device()->CreateSamplerState(&samplerdesc, point_sampler.GetAddressOf()));
+					 d3d11_misc::device()->CreateSamplerState(&samplerdesc, point_sampler.GetAddressOf()));
 
 			// Random texture sampler. Using wrap mode for 'tiling' the random texture over the full normals
 			// texture.
 			csamplerdesc = CD3D11_SAMPLER_DESC(CD3D11_DEFAULT{});
 			// csamplerdesc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
 			csamplerdesc.Filter = D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT;
-			csamplerdesc.AddressU = csamplerdesc.AddressV = csamplerdesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-
-			samplerdesc = (D3D11_SAMPLER_DESC)csamplerdesc;
-
-			DXASSERT(
-				"CreateSamplerState",
-				d3d11_misc::device()->CreateSamplerState(&samplerdesc, random_directions_sampler.GetAddressOf()));
-
-			// Linear sampler.
-			csamplerdesc = CD3D11_SAMPLER_DESC(CD3D11_DEFAULT{});
-			csamplerdesc.Filter = D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT;
-			csamplerdesc.AddressU = csamplerdesc.AddressV = csamplerdesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+			csamplerdesc.AddressU = csamplerdesc.AddressV = csamplerdesc.AddressW =
+			  D3D11_TEXTURE_ADDRESS_WRAP;
 
 			samplerdesc = (D3D11_SAMPLER_DESC)csamplerdesc;
 
 			DXASSERT("CreateSamplerState",
-							 d3d11_misc::device()->CreateSamplerState(&samplerdesc, linear_sampler.GetAddressOf()));
+					 d3d11_misc::device()->CreateSamplerState(&samplerdesc,
+															  random_directions_sampler.GetAddressOf()));
+
+			// Linear sampler.
+			csamplerdesc = CD3D11_SAMPLER_DESC(CD3D11_DEFAULT{});
+			csamplerdesc.Filter = D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+			csamplerdesc.AddressU = csamplerdesc.AddressV = csamplerdesc.AddressW =
+			  D3D11_TEXTURE_ADDRESS_CLAMP;
+
+			samplerdesc = (D3D11_SAMPLER_DESC)csamplerdesc;
+
+			DXASSERT("CreateSamplerState",
+					 d3d11_misc::device()->CreateSamplerState(&samplerdesc, linear_sampler.GetAddressOf()));
 		}
 
 		_create_random_xy_vectors(num_random_xy_vectors);
@@ -344,11 +351,11 @@ struct SsaoTextures {
 			subdata.SysMemSlicePitch = H * subdata.SysMemPitch;
 
 			rnd_xy_vector_tex.create(W,
-															 H,
-															 DXGI_FORMAT_R8G8B8A8_UNORM, // @comeback - Use 2 component format here?
-															 DXGI_FORMAT_R8G8B8A8_UNORM,
-															 constptr(subdata),
-															 "@rnd_vectors_texture");
+									 H,
+									 DXGI_FORMAT_R8G8B8A8_UNORM, // @comeback - Use 2 component format here?
+									 DXGI_FORMAT_R8G8B8A8_UNORM,
+									 constptr(subdata),
+									 "@rnd_vectors_texture");
 		}
 	}
 
@@ -363,7 +370,7 @@ struct SsaoTextures {
 
 		d3d11_misc::context()->ClearRenderTargetView(normals.rtv(), clear_value);
 		d3d11_misc::context()->ClearDepthStencilView(
-			normalized_depth.dsv(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+		  normalized_depth.dsv(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 	}
 
 	// Bind the srv of the normals and normalized_depth textures to the pixel shader texture registers
@@ -371,8 +378,8 @@ struct SsaoTextures {
 	void bind_ssao_build_pass_srvs()
 	{
 		ID3D11ShaderResourceView *srv_array[] = { normals.srv(),
-																							normalized_depth.srv(),
-																							rnd_xy_vector_tex.srv() };
+												  normalized_depth.srv(),
+												  rnd_xy_vector_tex.srv() };
 
 		d3d11_misc::context()->PSSetShaderResources(0, 3, srv_array);
 		ID3D11SamplerState *samplers_array[] = { point_sampler.Get(), random_directions_sampler.Get() };
@@ -384,7 +391,8 @@ struct SsaoTextures {
 		d3d11_misc::set_viewport_dims(ao_width, ao_height);
 
 		ID3D11RenderTargetView *rtv_array[] = { occlusion_factor_output.rtv() };
-		d3d11_misc::context()->OMSetRenderTargets(ARRAY_SIZE(rtv_array), rtv_array, nullptr); // No depth buffer
+		d3d11_misc::context()->OMSetRenderTargets(
+		  ARRAY_SIZE(rtv_array), rtv_array, nullptr); // No depth buffer
 	}
 
 	void set_rtv_and_srv_for_horizontal_blur()
@@ -396,8 +404,8 @@ struct SsaoTextures {
 		// ^ No depth buffer
 
 		ID3D11ShaderResourceView *srv_array[] = { normals.srv(),
-																							normalized_depth.srv(),
-																							occlusion_factor_output.srv() };
+												  normalized_depth.srv(),
+												  occlusion_factor_output.srv() };
 
 		d3d11_misc::context()->PSSetShaderResources(0, ARRAY_SIZE(srv_array), srv_array);
 
@@ -410,9 +418,12 @@ struct SsaoTextures {
 		d3d11_misc::set_viewport_dims(ao_width, ao_height);
 
 		ID3D11RenderTargetView *rtv_array[] = { blurred_output_1.rtv() };
-		d3d11_misc::context()->OMSetRenderTargets(ARRAY_SIZE(rtv_array), rtv_array, nullptr); // No depth buffer
+		d3d11_misc::context()->OMSetRenderTargets(
+		  ARRAY_SIZE(rtv_array), rtv_array, nullptr); // No depth buffer
 
-		ID3D11ShaderResourceView *srv_array[] = { normals.srv(), normalized_depth.srv(), blurred_output_0.srv() };
+		ID3D11ShaderResourceView *srv_array[] = { normals.srv(),
+												  normalized_depth.srv(),
+												  blurred_output_0.srv() };
 
 		d3d11_misc::context()->PSSetShaderResources(0, ARRAY_SIZE(srv_array), srv_array);
 
@@ -431,8 +442,8 @@ fo::Vector<xm4> generate_direction_samples(u32 count, f32 min_length, f32 max_le
 	for (u32 i = 0; i < count; ++i) {
 		fo::Vector3 direction = random_point_on_hemisphere(1.0f);
 
-		// My random_point_on_hemisphere returns a point where the hemisphere's axis is oriented along the y axis.
-		// I swap the coordinates so that the z component contains the y component's value instead.
+		// My random_point_on_hemisphere returns a point where the hemisphere's axis is oriented along the y
+		// axis. I swap the coordinates so that the z component contains the y component's value instead.
 		std::swap(direction.z, direction.y);
 		std::swap(direction.y, direction.x);
 
@@ -548,47 +559,50 @@ namespace app_loop
 
 			defines.push_back({ nullptr, nullptr });
 
-			app.shaders.render_usual_vs.compile_hlsl_file(
-				make_path(SOURCE_DIR, "usual_vs.hlsl"), D3DShaderKind::VERTEX_SHADER, "VS_main", defines.data());
+			app.shaders.render_usual_vs.compile_hlsl_file(make_path(SOURCE_DIR, "usual_vs.hlsl"),
+														  D3DShaderKind::VERTEX_SHADER,
+														  "VS_main",
+														  defines.data());
 
 			app.shaders.render_usual_ps.compile_hlsl_file(
-				make_path(SOURCE_DIR, "usual_ps.hlsl"), D3DShaderKind::PIXEL_SHADER, "PS_main", defines.data());
+			  make_path(SOURCE_DIR, "usual_ps.hlsl"), D3DShaderKind::PIXEL_SHADER, "PS_main", defines.data());
 
 			app.shaders.record_normals_ps.compile_hlsl_file(
-				make_path(SOURCE_DIR, "record_normals_and_depth_ps.hlsl"),
-				D3DShaderKind::PIXEL_SHADER,
-				"PS_main",
-				defines.data());
+			  make_path(SOURCE_DIR, "record_normals_and_depth_ps.hlsl"),
+			  D3DShaderKind::PIXEL_SHADER,
+			  "PS_main",
+			  defines.data());
 
 			app.shaders.screen_quad_vs.compile_hlsl_file(make_path(SOURCE_DIR, "full_screen_quad_vs.hlsl"),
-																									 D3DShaderKind::VERTEX_SHADER,
-																									 "VS_main",
-																									 defines.data());
+														 D3DShaderKind::VERTEX_SHADER,
+														 "VS_main",
+														 defines.data());
 
 			app.shaders.debug_ps.compile_hlsl_file(make_path(SOURCE_DIR, "ssao_sampling_ps.hlsl"),
-																						 D3DShaderKind::PIXEL_SHADER,
-																						 "PS_main",
-																						 defines.data());
+												   D3DShaderKind::PIXEL_SHADER,
+												   "PS_main",
+												   defines.data());
 
 			app.shaders.ssao_sampling_ps.compile_hlsl_file(make_path(SOURCE_DIR, "ssao_sampling_ps.hlsl"),
-																										 D3DShaderKind::PIXEL_SHADER,
-																										 "PS_ao_main",
-																										 defines.data());
+														   D3DShaderKind::PIXEL_SHADER,
+														   "PS_ao_main",
+														   defines.data());
 
 			app.shaders.ssao_blur_ps.compile_hlsl_file(make_path(SOURCE_DIR, "ssao_blur_pass_ps.hlsl"),
-																								 D3DShaderKind::PIXEL_SHADER,
-																								 "PS_main",
-																								 defines.data());
+													   D3DShaderKind::PIXEL_SHADER,
+													   "PS_main",
+													   defines.data());
 
 			app.shaders.draw_with_ssao_ps.compile_hlsl_file(make_path(SOURCE_DIR, "draw_with_ssao_ps.hlsl"),
-																											D3DShaderKind::PIXEL_SHADER,
-																											"PS_main",
-																											defines.data());
+															D3DShaderKind::PIXEL_SHADER,
+															"PS_main",
+															defines.data());
 		}
 
 		// Create render targets
 		{
-			app.ssao_render_target.create(d3dconf.window_width, d3dconf.window_height, app.num_random_xy_vectors);
+			app.ssao_render_target.create(
+			  d3dconf.window_width, d3dconf.window_height, app.num_random_xy_vectors);
 
 #if 0
 			app.dbg_render_target.create(
@@ -600,27 +614,28 @@ namespace app_loop
 		eng::mesh::Model tri_mesh;
 
 // Load the mesh
-#if 0
+#if 1
 		eng::mesh::load(tri_mesh, make_path(RESOURCES_DIR, "isosurface.obj").generic_u8string().c_str());
 		// eng::load_sphere_mesh(tri_mesh);
 #else
-		// CHECK_F(eng::mesh::load(tri_mesh, make_path(RESOURCES_DIR, "arnold.obj").generic_u8string().c_str()));
+		// CHECK_F(eng::mesh::load(tri_mesh, make_path(RESOURCES_DIR,
+		// "arnold.obj").generic_u8string().c_str()));
 
 		std::string objfile = make_path(RESOURCES_DIR, "arnold.obj").generic_u8string();
 
 		auto rot_90_y = eng::math::rotation_about_y(180.0f * eng::math::one_deg_in_rad);
 
 		eng::mesh::load_then_transform(tri_mesh,
-																	 objfile.c_str(),
-																	 {},
-																	 mesh::ModelLoadFlagBits::TRIANGULATE |
-																		 mesh::ModelLoadFlagBits::CALC_NORMALS,
-																	 rot_90_y);
+									   objfile.c_str(),
+									   {},
+									   mesh::ModelLoadFlagBits::TRIANGULATE |
+										 mesh::ModelLoadFlagBits::CALC_NORMALS,
+									   rot_90_y);
 
 #endif
 
 		LOG_F(INFO, "Loaded mesh");
-		app.mesh_data = eng::mesh::StrippedMeshData(tri_mesh[0]);
+		app.mesh_data = eng::mesh::StrippedMeshData(tri_mesh[0].o);
 
 		app.camera.set_look_at(xmload(xm3(0.0f, 0.0f, -2.0f)), xm_origin(), xm_unit_y());
 		app.camera.set_proj(0.5f, 4000.0f, XM_PI / 4.0f, float(d3dconf.window_width) / d3dconf.window_height);
@@ -649,14 +664,15 @@ namespace app_loop
 			constants.g_tan_half_xfov = app.camera.tan_half_xfov();
 			constants.g_tan_half_yfov = app.camera.tan_half_yfov();
 			constants.g_scene_textures_wh = { (f32)d3dconf.window_width, (f32)d3dconf.window_height };
-			constants.g_rnd_xy_texture_wh = { (f32)app.num_random_xy_vectors, (f32)app.num_random_xy_vectors };
+			constants.g_rnd_xy_texture_wh = { (f32)app.num_random_xy_vectors,
+											  (f32)app.num_random_xy_vectors };
 			constants.g_occlusion_texture_wh = { (f32)app.ssao_render_target.ao_width,
-																					 (f32)app.ssao_render_target.ao_width };
+												 (f32)app.ssao_render_target.ao_width };
 
 			const f32 min_length = 0.02f;
 			const f32 max_length = 0.05f;
 			fo::Vector<xm4> directions =
-				generate_direction_samples(DIRECTION_SAMPLES_ARRAY_LENGTH, min_length, max_length);
+			  generate_direction_samples(DIRECTION_SAMPLES_ARRAY_LENGTH, min_length, max_length);
 			std::copy(directions.begin(), directions.end(), constants.g_direction_samples);
 
 			// Redundant, considering we never change these values.
@@ -675,29 +691,30 @@ namespace app_loop
 
 		// Create the blur pass constant buffer
 		{
-			app.cb_ssao_blur_params = create_dynamic_cbuffer(sizeof(SSAOBlurParamsCB), "@cb_ssao_blur_params");
+			app.cb_ssao_blur_params =
+			  create_dynamic_cbuffer(sizeof(SSAOBlurParamsCB), "@cb_ssao_blur_params");
 		}
 
 		D3D11_INPUT_ELEMENT_DESC layout[] = { { "POSITION",
-																						0,
-																						DXGI_FORMAT_R32G32B32_FLOAT,
-																						0,
-																						app.mesh_data.position_offset,
-																						D3D11_INPUT_PER_VERTEX_DATA,
-																						0 },
-																					{ "NORMAL",
-																						0,
-																						DXGI_FORMAT_R32G32B32_FLOAT,
-																						0,
-																						app.mesh_data.normal_offset,
-																						D3D11_INPUT_PER_VERTEX_DATA,
-																						0 } };
+												0,
+												DXGI_FORMAT_R32G32B32_FLOAT,
+												0,
+												app.mesh_data.position_offset,
+												D3D11_INPUT_PER_VERTEX_DATA,
+												0 },
+											  { "NORMAL",
+												0,
+												DXGI_FORMAT_R32G32B32_FLOAT,
+												0,
+												app.mesh_data.normal_offset,
+												D3D11_INPUT_PER_VERTEX_DATA,
+												0 } };
 
 		hr = app.d3d.dev->CreateInputLayout(layout,
-																				ARRAY_SIZE(layout),
-																				app.shaders.render_usual_vs.blob()->GetBufferPointer(),
-																				app.shaders.render_usual_vs.blob()->GetBufferSize(),
-																				app.pos_normal_inputlayout.GetAddressOf());
+											ARRAY_SIZE(layout),
+											app.shaders.render_usual_vs.blob()->GetBufferPointer(),
+											app.shaders.render_usual_vs.blob()->GetBufferSize(),
+											app.pos_normal_inputlayout.GetAddressOf());
 
 		DXASSERT("CreateInputLayout", hr);
 
@@ -707,11 +724,11 @@ namespace app_loop
 		{
 			D3D11_BUFFER_DESC desc = {};
 			desc.Usage = D3D11_USAGE_DEFAULT;
-			desc.ByteWidth = eng::mesh::vertex_buffer_size(mesh_data);
+			desc.ByteWidth = mesh_data.o.get_vertices_size_in_bytes();
 			desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 
 			D3D11_SUBRESOURCE_DATA sub = {};
-			sub.pSysMem = eng::mesh::vertices(mesh_data);
+			sub.pSysMem = mesh_data.buffer;
 
 			hr = app.d3d.dev->CreateBuffer(&desc, &sub, app.mesh_vb.GetAddressOf());
 			DXASSERT("create vertex buffer", hr);
@@ -720,11 +737,11 @@ namespace app_loop
 		{
 			D3D11_BUFFER_DESC desc = {};
 			desc.Usage = D3D11_USAGE_DEFAULT;
-			desc.ByteWidth = eng::mesh::index_buffer_size(mesh_data);
+			desc.ByteWidth = mesh_data.o.get_indices_size_in_bytes();
 			desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
 
 			D3D11_SUBRESOURCE_DATA sub = {};
-			sub.pSysMem = eng::mesh::indices(mesh_data);
+			sub.pSysMem = mesh_data.buffer + mesh_data.o.get_vertices_size_in_bytes();
 
 			hr = app.d3d.dev->CreateBuffer(&desc, &sub, app.mesh_ib.GetAddressOf());
 			DXASSERT("create index buffer", hr);
@@ -744,15 +761,15 @@ namespace app_loop
 			cdesc.DepthEnable = FALSE;
 			D3D11_DEPTH_STENCIL_DESC desc = (D3D11_DEPTH_STENCIL_DESC)cdesc;
 			DXASSERT("CreateDepthStencilState",
-							 d3d11_misc::device()->CreateDepthStencilState(
-								 &desc, app.render_states.ds_no_depth_test.GetAddressOf()));
+					 d3d11_misc::device()->CreateDepthStencilState(
+					   &desc, app.render_states.ds_no_depth_test.GetAddressOf()));
 
 			// Yes depth test
 			cdesc = CD3D11_DEPTH_STENCIL_DESC(CD3D11_DEFAULT{});
 			desc = (D3D11_DEPTH_STENCIL_DESC)cdesc;
 			DXASSERT("CreateDepthStencilState",
-							 d3d11_misc::device()->CreateDepthStencilState(
-								 &desc, app.render_states.ds_yes_depth_test.GetAddressOf()));
+					 d3d11_misc::device()->CreateDepthStencilState(
+					   &desc, app.render_states.ds_yes_depth_test.GetAddressOf()));
 		}
 
 		LOG_F(INFO, "Init completed");
@@ -785,7 +802,7 @@ namespace app_loop
 	{
 		d3d11_misc::context()->ClearRenderTargetView(app.d3d.rtv_screen.Get(), DirectX::Colors::AliceBlue);
 		d3d11_misc::context()->ClearDepthStencilView(
-			app.d3d.depth_stencil_view.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+		  app.d3d.depth_stencil_view.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
 		// Enable depth test
 		d3d11_misc::context()->OMSetDepthStencilState(app.render_states.ds_yes_depth_test.Get(), 0);
@@ -821,7 +838,7 @@ namespace app_loop
 		d3d11_misc::context()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 		// Draw
-		d3d11_misc::context()->DrawIndexed(eng::mesh::num_indices(app.mesh_data), 0, 0);
+		d3d11_misc::context()->DrawIndexed(app.mesh_data.num_faces * 3, 0, 0);
 
 		app.d3d.schain->Present(0, 0);
 	}
@@ -838,8 +855,8 @@ namespace app_loop
 
 		d3d11_misc::set_viewport_dims(d3dconf.window_width, d3dconf.window_height);
 
-		// Pass 0, record scene's normals and depth in view space. Usually in a deferred scheme, I would do this
-		// anyway.
+		// Pass 0, record scene's normals and depth in view space. Usually in a deferred scheme, I would do
+		// this anyway.
 		app.ssao_render_target.set_normals_texture_as_render_target();
 
 		// Enable depth test
@@ -877,7 +894,7 @@ namespace app_loop
 			d3d11_misc::context()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 			// Draw
-			d3d11_misc::context()->DrawIndexed(eng::mesh::num_indices(app.mesh_data), 0, 0);
+			d3d11_misc::context()->DrawIndexed(app.mesh_data.num_faces * 3, 0, 0);
 		}
 
 		// Pass 1, ssao sampling pass - compute occlusion factor for each pixel
@@ -912,7 +929,8 @@ namespace app_loop
 			SSAOBlurParamsCB blur_params;
 			blur_params.is_horizontal_or_vertical = 0;
 
-			source_into_constant_buffer(app.cb_ssao_blur_params.Get(), &blur_params, sizeof(SSAOBlurParamsCB));
+			source_into_constant_buffer(
+			  app.cb_ssao_blur_params.Get(), &blur_params, sizeof(SSAOBlurParamsCB));
 
 			app.ssao_render_target.set_rtv_and_srv_for_horizontal_blur();
 
@@ -920,8 +938,8 @@ namespace app_loop
 			d3d11_misc::context()->PSSetShader(app.shaders.ssao_blur_ps.ps(), nullptr, 0);
 
 			ID3D11Buffer *cb_array[] = { app.cb_ssao_params.Get(),
-																	 app.cb_camera.Get(),
-																	 app.cb_ssao_blur_params.Get() };
+										 app.cb_camera.Get(),
+										 app.cb_ssao_blur_params.Get() };
 
 			d3d11_misc::context()->VSSetConstantBuffers(0, 1, cb_array);
 			d3d11_misc::context()->PSSetConstantBuffers(0, 3, cb_array);
@@ -933,7 +951,8 @@ namespace app_loop
 			// Vertical pass
 			blur_params.is_horizontal_or_vertical = 1;
 			app.ssao_render_target.set_rtv_and_srv_for_vertical_blur();
-			source_into_constant_buffer(app.cb_ssao_blur_params.Get(), &blur_params, sizeof(SSAOBlurParamsCB));
+			source_into_constant_buffer(
+			  app.cb_ssao_blur_params.Get(), &blur_params, sizeof(SSAOBlurParamsCB));
 			d3d11_misc::context()->Draw(3, 0);
 		}
 
@@ -959,6 +978,7 @@ namespace app_loop
 
 	template <> void render<SSAODemo>(SSAODemo &app)
 	{
+		app.using_ao_pass = false;
 		if (!app.using_ao_pass) {
 			render_without_ssao(app);
 		} else {

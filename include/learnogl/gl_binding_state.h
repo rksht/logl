@@ -819,7 +819,6 @@ struct FBO {
     GLuint depth_attachment_texture() const;
 };
 
-
 struct SetInputOutputFBO {
     FBO *input_fbo = nullptr;
     i32 read_attachment_number = FBO::NO_ATTACHMENT;
@@ -891,6 +890,10 @@ template <typename ResourceDesc> struct PerResourceBindpoints {
 
 void set_gl_depth_stencil_state(const DepthStencilStateDesc &ds);
 void set_gl_rasterizer_state(const RasterizerStateDesc &rs);
+
+inline void set_gl_blendfunc_state(const BlendFunctionDesc *desc_per_color_attachment, int num_attachments) {
+    ABORT_F("Not implemented yet");
+}
 
 struct SavedBindingsHeader {
     // Total size of the block that this struct header precedes (excluding the size of this block)

@@ -14,7 +14,7 @@ struct FixedStringBuffer {
     };
 
     // Stores the starting byte and the length of the nth string excluding the following 0 byte, allowing O(1)
-    // length.
+    // length query.
     fo::Array<StartAndLength> _start_and_length;
 
     // We return this wrapped index so that other code gets indication that this is a private index they
@@ -40,4 +40,6 @@ struct FixedStringBuffer {
 
     // Returns length of the given string corresponding to this index
     u32 length(Index index) const;
+
+    void reserve(u32 num_strings, u32 max_length);
 };

@@ -70,6 +70,10 @@ constexpr fo::Vector3 unit_x = { 1.0, 0.0, 0.0 };
 constexpr fo::Vector3 unit_y = { 0.0, 1.0, 0.0 };
 constexpr fo::Vector3 unit_z = { 0.0, 0.0, 1.0 };
 
+constexpr fo::Vector4 unit_x_4 = {1.0, 0.0, 0.0, 0.0};
+constexpr fo::Vector4 unit_y_4 = {0.0, 1.0, 0.0, 0.0};
+constexpr fo::Vector4 unit_z_4 = {0.0, 0.0, 1.0, 0.0};
+
 constexpr fo::Matrix4x4 identity_matrix =
     fo::Matrix4x4{ { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 }, { 0, 0, 0, 1 } };
 
@@ -748,7 +752,7 @@ inline void compute_orthogonal_complements(const fo::Vector3 &w, fo::Vector3 &u,
         float inv_length = 1.0f / std::sqrt(w.y * w.y + w.z * w.z);
         u = { 0.f, -w.z * inv_length, w.y * inv_length };
     }
-    v = cross(w, u);
+    v = normalize(cross(w, u));
 }
 
 // Functions operating on quaternions.

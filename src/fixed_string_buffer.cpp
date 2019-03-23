@@ -30,3 +30,9 @@ u32 FixedStringBuffer::length(Index index) const {
     auto sl = _start_and_length[index._i];
     return sl.length;
 }
+
+void FixedStringBuffer::reserve(u32 num_strings, u32 max_length) {
+    fo::reserve(_concat_of_strings,
+                fo::size(_concat_of_strings) + num_strings * (max_length + 1)); // + 1 for nul
+    fo::reserve(_start_and_length, fo::size(_start_and_length) + num_strings);
+}

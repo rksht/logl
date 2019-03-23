@@ -14,6 +14,7 @@
 #include <learnogl/pmr_compatible_allocs.h>
 // #include <learnogl/post_processing.h>
 #include <learnogl/audio.h>
+#include <learnogl/fixed_string_buffer.h>
 #include <learnogl/resource.h>
 #include <learnogl/rng.h>
 #include <learnogl/shader.h>
@@ -145,6 +146,8 @@ struct GLApp {
     SoundManager sound_man;
     RenderManager render_manager;
     FBO default_fbo;
+
+    FixedStringBuffer fixed_string_buffer;
 };
 
 /// Returns ref to a global GLApp structure which gets initialized by start_gl by default
@@ -159,6 +162,8 @@ inline SoundManager &g_sound_man() { return gl().sound_man; }
 inline StringTable &g_st() { return gl().string_table; }
 
 inline RenderManager &g_rm() { return gl().render_manager; }
+
+inline FixedStringBuffer &g_strings() { return gl().fixed_string_buffer; }
 
 /// Creates a window and initializes a GL context
 void start_gl(const StartGLParams &params, GLApp &gl_app = gl());

@@ -85,7 +85,7 @@ PSDebugOutput PS_main(PSInput pin)
 	dist /= 10.0;
 	o.position = float4(dist, dist, dist, 1.0);
 
-	float fz = frag_z_wrt_view_space(pin.near_plane_point, pin.tex);
+	float fz = frag_z_wrt_view_space(pin.tex);
 
 	fz /= 10.0;
 
@@ -106,6 +106,7 @@ PS_AO_Output PS_ao_main(PSInput pin)
 	// const float2 repeat_factor = g_scene_textures_wh;
 	// const float2 repeat_factor = float2(1, 1);
 	// const float2 repeat_factor = float2(4, 4);
+	// ^ Uncomment these for fun.
 
 	// Sample the textures here
 	float3 normal = normals_texture.Sample(point_sampler, pin.tex).rgb;
@@ -144,7 +145,7 @@ PS_AO_Output PS_ao_main(PSInput pin)
 		offset_ndc.y = offset_ndc.y * -0.5 + 0.5;
 
 		// Get the actual depth that got rendered at this location of the screen.
-		float actual_samples_z = frag_z_wrt_view_space(pin.near_plane_point, offset_ndc.xy);
+		float actual_samples_z = frag_z_wrt_view_space(pin.near_plane_point);
 
 		// How far is the sampled point from the fragment along view space z. Out
 		// of range amounts to no occlusion at all.

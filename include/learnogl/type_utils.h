@@ -3,8 +3,6 @@
 #include <learnogl/cons.h>
 #include <utility>
 
-// TODO: Use std::variant in C++17 mode
-
 // optional template
 #ifdef _MSC_VER
 #    include <optional>

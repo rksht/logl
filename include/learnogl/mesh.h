@@ -10,7 +10,16 @@ namespace mesh {
 using IndexType = u16;
 
 constexpr u32 ATTRIBUTE_NOT_PRESENT = std::numeric_limits<u32>::max();
+constexpr u32 MAX_BONES_AFFECTING_VERTEX = 5;
+constexpr i32 INVALID_BONE_ID = -1;
 
+// Given N = number of vertices, M = number of indices in mesh, the data is laid out like so:
+//
+// | pnut_0 | pnut_1 |...| pnut_{N-1} |
+// | index_0 | index_1 |...| index_{M-1} |
+// | afb_0 | afb_1 | ... | afb_{N-1} |
+//
+// "pnut" means position, normal, uv, tangent. The last 3 attributes are optional depending on the mesh.
 struct MeshDataOffsetsAndSizes {
     u32 num_vertices;     // Number of (unique) vertices in the mesh
     u32 num_faces;        // Number of faces (triangles really) in the mesh
@@ -19,16 +28,89 @@ struct MeshDataOffsetsAndSizes {
     u32 normal_offset;    // Offset of normal attribute data in a pack
     u32 tex2d_offset;     // Offset of 2d texcoord attribute data in a pack
     u32 tangent_offset;   // Offset of tangent attribute data in a pack
+    u32 num_bones;        // Number of bones in the skinned mesh.
+    u32 bone_data_offset; // Bone data offset(Not needed..? Place them after indices)
 
     u32 get_vertices_size_in_bytes() const { return num_vertices * packed_attr_size; }
-
     u32 get_indices_size_in_bytes() const { return num_faces * 3 * sizeof(u16); }
+
+    // Returns the amount of bytes needed by the affecting bones list.
+    inline u32 get_affecting_bones_size_in_bytes() const;
+
+    // Returns the amount of bytes needed by the offset transform list.
+    inline u32 get_offset_transform_size_in_bytes() const;
+
+    // Sum of above two really.
+    inline u32 get_bone_data_size_in_bytes() const;
+
+    u32 get_vertices_byte_offset() const { return 0; }
+    u32 get_indices_byte_offset() const { return get_vertices_size_in_bytes(); }
+    u32 get_bones_byte_offset() const { return get_vertices_size_in_bytes() + get_indices_size_in_bytes(); }
+    u32 get_affecting_bones_byte_offset() const { return get_bones_byte_offset(); }
+    u32 get_offset_transforms_byte_offset() const {
+        return get_bones_byte_offset() + get_affecting_bones_size_in_bytes();
+    }
 };
 
 inline bool have_same_attributes(const MeshDataOffsetsAndSizes &mo1, const MeshDataOffsetsAndSizes &mo2) {
     return mo1.position_offset == mo2.position_offset && mo1.normal_offset == mo2.normal_offset &&
            mo1.tex2d_offset == mo2.tex2d_offset && mo1.tangent_offset == mo2.tangent_offset;
 }
+
+// Each bone has an unique id in the model. The id for a bone is just an index into arrays of data.
+
+// List of affecting bones for a vertex. We don't store explicit count. If there's less than
+// MAX_BONES_AFFECTING_VERTEX affecting the vertex, we store 0.0 as the weight of the remaining slots.
+struct AffectingBones {
+    i32 bone_ids[MAX_BONES_AFFECTING_VERTEX];
+    f32 weights[MAX_BONES_AFFECTING_VERTEX];
+
+    constexpr AffectingBones()
+        : bone_ids{}
+        , weights{} {}
+
+    static constexpr AffectingBones get_empty() {
+        AffectingBones a{};
+        for (u32 i = 0; i < MAX_BONES_AFFECTING_VERTEX; ++i) {
+            a.bone_ids[i] = -1;
+        }
+        return a;
+    }
+
+    u32 count() {
+        u32 i = 0;
+        while (i < MAX_BONES_AFFECTING_VERTEX) {
+            if (bone_ids[i] == INVALID_BONE_ID) {
+                break;
+            }
+        }
+        return i;
+    }
+};
+
+struct OffsetTransform {
+    fo::Matrix4x4 m;
+};
+
+inline u32 MeshDataOffsetsAndSizes::get_affecting_bones_size_in_bytes() const {
+    return SELF.num_bones * sizeof(AffectingBones);
+}
+
+inline u32 MeshDataOffsetsAndSizes::get_offset_transform_size_in_bytes() const {
+    return SELF.num_bones * sizeof(OffsetTransform);
+}
+
+inline u32 MeshDataOffsetsAndSizes::get_bone_data_size_in_bytes() const {
+    return SELF.num_bones * (sizeof(AffectingBones) + sizeof(OffsetTransform));
+}
+
+struct BonesDataPointers {
+    // We keep the per-vertex lists of affecting bones.
+    AffectingBones *affecting_bones;
+
+    // An array of offset transform of each bone in order of bone index.
+    fo::Matrix4x4 *offset_transforms;
+};
 
 // Represents the format of 3D triangle-list mesh. All sizes and offsets are in bytes. Can be sourced into vbo
 // and ebo and should be drawn with GL_TRIANGLES.
@@ -47,6 +129,7 @@ struct StrippedMeshData {
     u32 normal_offset;
     u32 tex2d_offset;
     u32 tangent_offset;
+    u32 bone_data_offset;
     bool positions_are_2d;
 
     StrippedMeshData() = default;
@@ -59,6 +142,8 @@ struct StrippedMeshData {
         normal_offset = mdo.normal_offset;
         tex2d_offset = mdo.tex2d_offset;
         tangent_offset = mdo.tangent_offset;
+        bone_data_offset = mdo.bone_data_offset;
+
         this->positions_are_2d = positions_are_2d;
     }
 };
@@ -86,6 +171,15 @@ inline const uint16_t *indices_begin(MeshData &m) {
 }
 
 inline const uint16_t *indices_end(MeshData &m) { return indices_begin(m) + m.o.num_faces * 3; }
+
+constexpr u32 max_children_bones = 5;
+
+struct SkeletonNode {
+    std::array<SkeletonNode *, max_children_bones> children;
+    std::array<char, 64> name; // This bone's name
+    u32 num_children;
+    u32 bone_index;
+};
 
 /// Represents a single model which can contain multiple meshes
 struct Model {
@@ -119,6 +213,7 @@ enum ModelLoadFlagBits : u32 {
     CALC_NORMALS = 1 << 2,
     GEN_UV_COORDS = 1 << 3,
     FILL_CONST_UV = 1 << 4, // If model does not have uv coordinates, you can set its vertices to a given uv
+    IGNORE_BONES = 1 << 5,
 };
 
 // Loads the model specified in the given file into `m`, which must not be containing any model.

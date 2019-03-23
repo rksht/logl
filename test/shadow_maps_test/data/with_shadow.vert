@@ -7,24 +7,18 @@ layout(location = 1) in vec3 normal;
 layout(location = 2) in vec4 tangent;
 layout(location = 3) in vec2 st;
 
-/*  __macro__
-
-    PER_OBJECT_UBLOCK_BINDING = int
-
-*/
-
-// Per model  data (and per mesh since only 1 mesh per model)
-layout(binding = PER_OBJECT_UBLOCK_BINDING, std140) uniform ublock_PerObject {
-    mat4 world_from_local_xform;
-    mat4 inv_world_from_local_xform;
-    Material object_material;
-};
-
-layout(binding = CAMERA_ETC_UBLOCK_BINDING, std140) uniform ublock_EyeBlock {
+layout(binding = 0, std140) uniform ublock_EyeBlock {
     mat4 view_from_world_xform;
     mat4 clip_from_view_xform;
     vec3 eye_pos;
     float frame_interval;
+};
+
+// Per model data (and per mesh since only 1 mesh per model)
+layout(binding = 1, std140) uniform ublock_PerObject {
+    mat4 world_from_local_xform;
+    mat4 inv_world_from_local_xform;
+    Material object_material;
 };
 
 out VsOut {

@@ -40,6 +40,8 @@
 #include <learnogl/kitchen_sink.h>
 #include <learnogl/type_utils.h>
 
+#include <learnogl/error.h>
+
 #include <learnogl/debug_break.h>
 
 reallyconst LOGL_MILD_LOG_CHANNEL = loguru::NamedVerbosity::Verbosity_1;

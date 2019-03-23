@@ -7,6 +7,8 @@
 
 namespace eng {
 
+TU_LOCAL void create_common_vaos(RenderManager &self);
+
 static constexpr inline GLResource64
 encode_glresource64(RMResourceID16 rmid, GLObjectKind::E object_kind, GLuint gl_handle) {
     GLResource64 b = 0;
@@ -40,7 +42,12 @@ RenderManager::RenderManager(fo::Allocator &backing_allocator)
     _cached_rasterizer_states[0].set_default();
     _cached_depth_stencil_states[0].set_default();
     _cached_blendfunc_states[0].set_default();
+
+    // First entry of the `_fbos` array is just a default constructed NewFBO, denoting default framebuffer.
+    fo::push_back(_fbos, {});
 }
+
+void shutdown_render_manager(RenderManager &self) { UNUSED(self); }
 
 static RMResourceID16 new_resource_id(RenderManager &rm) {
     if (rm._deleted_ids._size == rm._deleted_ids._capacity) {
@@ -143,6 +150,23 @@ PixelUnpackBufferHandle create_pixel_unpack_buffer(RenderManager &rm, const Buff
     return { create_buffer_common(rm, ci, GLObjectKind::PIXEL_UNPACK_BUFFER) };
 }
 
+void source_to_uniform_buffer(RenderManager &self, UniformBufferHandle ubo, SourceToBufferInfo source_info) {
+    const BufferInfo &buffer_info = find_with_end(self.uniform_buffers, ubo.rmid())
+                                        .keyvalue_must("No buffer info found for uniform buffer")
+                                        .second();
+    glBindBuffer(GL_UNIFORM_BUFFER, buffer_info.handle);
+
+    if (source_info.num_bytes == 0) {
+        source_info.num_bytes = buffer_info.bytes;
+    }
+
+    if (source_info.discard) {
+        glInvalidateBufferSubData(GL_UNIFORM_BUFFER, source_info.byte_offset, source_info.num_bytes);
+    }
+    glBufferSubData(
+        GL_UNIFORM_BUFFER, source_info.byte_offset, source_info.num_bytes, source_info.source_bytes);
+}
+
 VertexArrayHandle create_vao(RenderManager &self, const VaoFormatDesc &ci, const char *debug_label) {
     for (auto &vao : self._vaos_generated) {
         if (vao.format_desc == ci) {
@@ -157,6 +181,64 @@ VertexArrayHandle create_vao(RenderManager &self, const VaoFormatDesc &ci, const
     auto id64 = encode_glresource64(rmid, GLObjectKind::VAO, handle);
     fo::set(self._rmid16_to_res64, rmid, id64);
     return VertexArrayHandle{ rmid };
+}
+
+// TODO: Cache. Already in gl_binding_state.cpp. Do that here.
+SamplerObjectHandle create_sampler_object(RenderManager &self, SamplerDesc desc) {
+    GLuint gl_handle;
+    glGenSamplers(1, &gl_handle);
+
+    LOG_F(INFO, "Creating a new sampler");
+
+    if (desc.mag_filter != default_sampler_desc.mag_filter) {
+        glSamplerParameteri(gl_handle, GL_TEXTURE_MAG_FILTER, desc.mag_filter);
+    }
+
+    if (desc.min_filter != default_sampler_desc.min_filter) {
+        glSamplerParameteri(gl_handle, GL_TEXTURE_MIN_FILTER, desc.min_filter);
+    }
+
+    if (desc.addrmode_u != default_sampler_desc.addrmode_u) {
+        glSamplerParameteri(gl_handle, GL_TEXTURE_WRAP_S, desc.addrmode_u);
+    }
+
+    if (desc.addrmode_v != default_sampler_desc.addrmode_v) {
+        glSamplerParameteri(gl_handle, GL_TEXTURE_WRAP_T, desc.addrmode_v);
+    }
+
+    if (desc.addrmode_w != default_sampler_desc.addrmode_w) {
+        glSamplerParameteri(gl_handle, GL_TEXTURE_WRAP_R, desc.addrmode_w);
+    }
+
+    // Set the border color unconditionally
+    glSamplerParameterfv(gl_handle, GL_TEXTURE_BORDER_COLOR, desc.border_color);
+
+    if (desc.min_lod != default_sampler_desc.min_lod) {
+        glSamplerParameterf(gl_handle, GL_TEXTURE_MIN_LOD, desc.min_lod);
+    }
+
+    if (desc.max_lod != default_sampler_desc.max_lod) {
+        glSamplerParameterf(gl_handle, GL_TEXTURE_MAX_LOD, desc.max_lod);
+    }
+
+    if (desc.compare_mode != GL_NONE) {
+        // Set the compare func and mode together
+        glSamplerParameteri(gl_handle, GL_TEXTURE_COMPARE_MODE, desc.compare_mode);
+        glSamplerParameteri(gl_handle, GL_TEXTURE_COMPARE_FUNC, desc.compare_func);
+    }
+
+    if (desc.mip_lod_bias != default_sampler_desc.mip_lod_bias) {
+        glSamplerParameterf(gl_handle, GL_TEXTURE_LOD_BIAS, desc.mip_lod_bias);
+    }
+
+    if (desc.max_anisotropy != 0.0f) {
+        glSamplerParameterf(gl_handle, GL_TEXTURE_MAX_ANISOTROPY, desc.max_anisotropy);
+    }
+
+    auto rmid = new_resource_id(self);
+    auto res64 = encode_glresource64(rmid, GLObjectKind::SAMPLER_OBJECT, gl_handle);
+    self._rmid16_to_res64[rmid] = res64;
+    return SamplerObjectHandle(rmid);
 }
 
 RasterizerStateId create_rs_state(RenderManager &self, const RasterizerStateDesc &desc) {
@@ -196,7 +278,8 @@ constexpr u32 num_texel_type_configs =
     TexelOrigType::numbits * TexelComponents::numbits * TexelInterpretType::numbits;
 
 // clang-format off
-constexpr CexprSparseArray<GLExternalFormat, num_texel_type_configs> texel_info_to_gl_external_format = []() {
+
+constexpr auto make_texel_info_to_ext_format() {
     CexprSparseArray<GLExternalFormat, num_texel_type_configs> types;
 
     // Unnormalized fetches
@@ -240,9 +323,11 @@ constexpr CexprSparseArray<GLExternalFormat, num_texel_type_configs> texel_info_
     // rendering. As such it doesn't make sense to generate an external format for it.
 
     return types;
-}();
+}
 
-constexpr CexprSparseArray<GLInternalFormat, num_texel_type_configs> texel_info_to_gl_internal_format = GLOBAL_LAMBDA {
+constexpr CexprSparseArray<GLExternalFormat, num_texel_type_configs> texel_info_to_gl_external_format = make_texel_info_to_ext_format();
+
+constexpr auto make_texel_info_to_int_format() {
     CexprSparseArray<GLInternalFormat, num_texel_type_configs> types;
 
     // Unnormalized fetches
@@ -291,7 +376,9 @@ constexpr CexprSparseArray<GLInternalFormat, num_texel_type_configs> texel_info_
     // rendering. As such it doesn't make sense to generate an external format for it.
 
     return types;
-}();
+}
+
+constexpr CexprSparseArray<GLInternalFormat, num_texel_type_configs> texel_info_to_gl_internal_format = make_texel_info_to_int_format();
 
 // clang-format on
 
@@ -407,7 +494,7 @@ Texture2DHandle create_texture_2d(RenderManager &self, const TextureCreateInfo &
     // Store texture info and return the resource-id
 }
 
-void init_render_manager(RenderManager &self, const RenderManagerInitConfig &conf) {
+void init_render_manager(RenderManager &self) {
     // Create a camera transform uniform buffer
     BufferCreateInfo buffer_ci;
     buffer_ci.bytes = CAMERA_TRANSFORM_UBLOCK_SIZE;
@@ -417,6 +504,8 @@ void init_render_manager(RenderManager &self, const RenderManagerInitConfig &con
 
     // Initialize default framebuffer info.
     self._screen_fbo.init_from_default_framebuffer();
+
+    create_common_vaos(self);
 }
 
 VarShaderHandle create_shader_object(RenderManager &self,
@@ -822,6 +911,46 @@ VaoFormatDesc vao_format_from_mesh_data(const mesh::StrippedMeshData &m) {
         fo::push_back(array, tangent);
     }
     return VaoFormatDesc::from_attribute_formats(array);
+}
+
+TU_LOCAL void create_common_vaos(RenderManager &self) {
+    // Position 2D
+    self.pos2d_vao_rmid = create_vao(
+        self, VaoFormatDesc::from_attribute_formats({ { 2, GL_FLOAT, GL_FALSE, 0, 0 } }), "@vao_pos2d");
+
+    // Position 3D
+    self.pos_vao_rmid = create_vao(
+        self, VaoFormatDesc::from_attribute_formats({ { 3, GL_FLOAT, GL_FALSE, 0, 0 } }), "@vao_pos3d");
+
+    // Pos, Normal
+    self.pn_vao_rmid = create_vao(
+        self,
+        VaoFormatDesc::from_attribute_formats(
+            { { 3, GL_FLOAT, GL_FALSE, 0, 0 }, { 3, GL_FLOAT, GL_FALSE, sizeof(fo::Vector3), 0 } }),
+        "@vao_pos_normal_3d");
+
+    // Pos, Normal, Texcoord2d
+    self.pnu_vao_rmid =
+        create_vao(self,
+                   VaoFormatDesc::from_attribute_formats(
+                       { { 3, GL_FLOAT, GL_FALSE, 0, 0 },
+                         { 3, GL_FLOAT, GL_FALSE, sizeof(fo::Vector3), 0 },
+                         { 2, GL_FLOAT, GL_FALSE, sizeof(fo::Vector3) + sizeof(fo::Vector2), 0 } }),
+                   "@vao_pos_normal_uv_3d");
+
+    // Pos, Normal, Texcoord2d, Tangent
+    self.pnut_vao_rmid =
+        create_vao(self,
+                   VaoFormatDesc::from_attribute_formats(
+                       { { 3, GL_FLOAT, GL_FALSE, 0, 0 },
+                         { 3, GL_FLOAT, GL_FALSE, sizeof(fo::Vector3), 0 },
+                         { 2, GL_FLOAT, GL_FALSE, sizeof(fo::Vector3) + sizeof(fo::Vector3), 0 },
+                         { 4,
+                           GL_FLOAT,
+                           GL_FALSE,
+                           sizeof(fo::Vector3) + sizeof(fo::Vector3) + sizeof(fo::Vector2),
+                           0 } }),
+                   "@vao_pos_normal_uv_tan_3d");
 }
 
 } // namespace eng

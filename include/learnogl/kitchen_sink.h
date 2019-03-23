@@ -342,6 +342,14 @@ u32 split_string(const char *in,
                  fo::Vector<fo_ss::Buffer> &out,
                  fo::Allocator &sub_string_allocator = fo::memory_globals::default_allocator());
 
+template <typename T, typename... Args> T *fo_alloc_init(Args &&... args) {
+    return fo::make_new<T>(fo::memory_globals::default_allocator(), std::forward<Args>(args)...);
+}
+
+template <typename T, typename... Args> T *fo_delete(T *p) {
+    return fo::make_delete(fo::memory_globals::default_allocator(), p);
+}
+
 constexpr static inline fo::Vector4 normalize_rgba_u8(uint32_t rgba) {
     const uint32_t r = (rgba & 0xff000000u) >> 24;
     const uint32_t g = (rgba & 0x00ff0000u) >> 16;

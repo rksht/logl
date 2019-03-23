@@ -45,8 +45,8 @@ SpacesBeforeTrailingComments: 1
 Cpp11BracedListStyle: false
 IndentPPDirectives: AfterHash
 Standard:        Cpp11
-IndentWidth:     2
-TabWidth:        2
+IndentWidth:     4
+TabWidth:        4
 UseTab:          Always
 BreakBeforeBraces: Linux
 SpacesInParentheses: false

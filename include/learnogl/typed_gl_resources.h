@@ -19,6 +19,10 @@
 
 #include <learnogl/gl_binding_state.h> // Taking some stuff from here for now.
 
+// NOTE - Don't worry about hitting max resource limits in shaders. Have some default bindpoints for your use-
+// case and rest you can assign semi-arbitrarily using bindpoints in glsl code. Read these bindpoints from
+// GLSL, and bind resources before drawing.
+
 namespace eng {
 
 ENUMSTRUCT BindpointKind {
@@ -57,6 +61,8 @@ ENUMSTRUCT GLObjectKind {
         ARRAY_TEXTURE_2D,
         ARRAY_TEXTURE_3D,
         ARRAY_TEXTURE_CUBE,
+
+        SAMPLER_OBJECT,
 
         VERTEX_SHADER,
         TESS_CONTROL_SHADER,
@@ -326,6 +332,7 @@ struct GLInternalFormat {
 };
 
 struct TextureCreateInfo {
+    // Keep this 0 if source is a file, then width, height and mips will be read from given file.
     u16 width = 0;
     u16 height = 0;
     u16 depth = 0;
@@ -404,47 +411,6 @@ static constexpr u32 CAMERA_TRANSFORM_UBLOCK_SIZE = sizeof(CameraTransformUB);
 
 /// Where some shader string can be stored before passing to create_shader_object`. Usually a file.
 using ShaderSourceType = VariantTable<const char *, fs::path>;
-
-// Maximum number of resource views for each type over all shader stages. Set to some non-default value if
-// you want.
-struct MaxCombinedShaderResourceViews {
-    // The max uniform buffer bindpoints is 70 per the spec. The max uniform blocks is however very small
-    // compared to that which is 12.
-    u32 uniform_blocks = 70;
-    u32 shader_storage_blocks = 8;
-    u32 atomic_counters = 8;
-    u32 texture_units = 16;
-    u32 image_units = 8;
-
-    // Set any of the above limits to one of these values so that we use glGet to retrieve the actual
-    // limits
-    static constexpr u32 IGNORE_AND_GET = 9999;
-};
-
-struct MaxVsResourceAccessors {
-    static constexpr u32 IGNORE_AND_GET = 9999;
-    u32 uniform_blocks = 12;
-    u32 shader_storage_blocks = IGNORE_AND_GET;
-    u32 texture_units = 16;
-    u32 vec4_attributes = 16;
-};
-
-struct MaxFsResourceAccessors {
-    static constexpr u32 IGNORE_AND_GET = 9999;
-    u32 uniform_blocks = 12;
-    u32 shader_storage_blocks = IGNORE_AND_GET;
-    u32 texture_units = 16;
-};
-
-struct MaxTcResourceAccessors {
-    static constexpr u32 IGNORE_AND_GET = 9999;
-    u32 shader_storage_blocks = IGNORE_AND_GET;
-};
-
-struct MaxTeResourceAccessors {
-    static constexpr u32 IGNORE_AND_GET = 9999;
-    u32 shader_storage_blocks = IGNORE_AND_GET;
-};
 
 struct GLObjectHandle {
     RMResourceID16 _rmid = 0;
@@ -526,6 +492,11 @@ struct VertexArrayHandle : GLObjectHandle {
         : GLObjectHandle{ rmid } {}
 };
 
+struct SamplerObjectHandle : GLObjectHandle {
+    SamplerObjectHandle(RMResourceID16 rmid = 0)
+        : GLObjectHandle{ rmid } {}
+};
+
 using VarShaderHandle = ::VariantTable<VertexShaderHandle,
                                        FragmentShaderHandle,
                                        GeometryShaderHandle,
@@ -533,8 +504,7 @@ using VarShaderHandle = ::VariantTable<VertexShaderHandle,
                                        TessEvalShaderHandle,
                                        ComputeShaderHandle>;
 
-// Some useful per FBO info for our purposes will be to know the data type and dimension of each
-// attachment. I should just keep this data in NewFBO instead of creating a separate type..
+// Some useful per FBO info for our purposes will be to know the data type and dimension of each attachment.
 struct FboPerAttachmentDim {
     struct AttachmentInfo {
         u16 width = 0;
@@ -554,6 +524,7 @@ struct FboPerAttachmentDim {
 
 struct NewFBO {
     FboPerAttachmentDim _dims;
+
     std::array<GLResource64, MAX_FBO_ATTACHMENTS> _color_textures = {};
     GLResource64 _depth_texture = 0;
     GLResource64 _fbo_id64 = 0;
@@ -571,9 +542,13 @@ struct NewFBO {
     }
 
     bool has_depth_texture() const { return GLResource64_RMID_Mask::extract(_depth_texture) != 0; }
+
+    static NewFBO default_fbo();
 };
 
 struct RenderManager : NonCopyable {
+    FixedStringBuffer _debug_labels_buffer;
+
     fo::ArenaAllocator _allocator;
 
     fo::TempAllocator512 _small_allocator{ fo::memory_globals::default_allocator() };
@@ -639,8 +614,6 @@ struct RenderManager : NonCopyable {
 
     fo::Vector<VaoFormatAndRMID> _vaos_generated{ 0, _allocator };
 
-    MaxCombinedShaderResourceViews max_combined_resource_views;
-
     // Constants that don't change after assigned. For now, these are hardcoded to
     // minimum defaults.
 
@@ -658,6 +631,12 @@ struct RenderManager : NonCopyable {
     fo::OrderedMap<fo_ss::Buffer, RMResourceID16> _path_to_shader_rmid;
 
     FBO _screen_fbo;
+
+    VertexArrayHandle pos2d_vao_rmid = 0;
+    VertexArrayHandle pos_vao_rmid = 0;
+    VertexArrayHandle pn_vao_rmid = 0;
+    VertexArrayHandle pnu_vao_rmid = 0;
+    VertexArrayHandle pnut_vao_rmid = 0;
 
     RenderManager(fo::Allocator &backing_allocator = fo::memory_globals::default_allocator());
 };
@@ -677,22 +656,17 @@ struct GL_ShaderResourceBinding {
 
 struct FboId {
     u16 _id;
+
+    static inline FboId for_default_fbo();
 };
+
+static inline FboId for_default() { return FboId{ 0 }; }
 
 FboId create_fbo(RenderManager &self,
                  const fo::Array<RMResourceID16> &color_textures,
                  RMResourceID16 depth_texture = 0);
 
-struct RenderManagerInitConfig {
-    MaxCombinedShaderResourceViews max_combined;
-    MaxVsResourceAccessors max_vs;
-    MaxFsResourceAccessors max_fs;
-    MaxTcResourceAccessors max_tc;
-    MaxTeResourceAccessors max_te;
-};
-
-void init_render_manager(RenderManager &self,
-                         const RenderManagerInitConfig &conf = RenderManagerInitConfig{});
+void init_render_manager(RenderManager &self);
 
 void shutdown_render_manager(RenderManager &self);
 
@@ -807,8 +781,10 @@ ComputeShaderHandle create_compute_shader(RenderManager &self,
                                           ShaderDefines &macro_defs,
                                           const char *debug_label = nullptr);
 
-struct ShadersToUse {
+// Create a sampler object
+SamplerObjectHandle create_sampler_object(RenderManager &self, const SamplerDesc &desc);
 
+struct ShadersToUse {
     RMResourceID16 vs = 0;
     RMResourceID16 tc = 0;
     RMResourceID16 te = 0;
@@ -824,6 +800,13 @@ struct ShadersToUse {
         return { (uint32_t(vs) << 16) | uint32_t(fs),
                  (uint32_t(tc) << 16) | uint32_t(te),
                  (uint32_t(gs) << 16) | uint32_t(cs) };
+    }
+
+    static constexpr ShadersToUse from_vs_fs(RMResourceID16 vs, RMResourceID16 fs) {
+        ShadersToUse use;
+        use.vs = vs;
+        use.fs = fs;
+        return use;
     }
 };
 
@@ -865,6 +848,39 @@ void bind_to_bindpoint(RenderManager &self, UniformBufferHandle ubo_handle, GLui
 
 void add_backing_texture_to_view(RenderManager &self, RMResourceID16 view_fb_rmid);
 void add_backing_depth_texture_to_view(RenderManager &self);
+
+struct SourceToBufferInfo {
+    const void *source_bytes;
+    u32 num_bytes;
+    u32 byte_offset;
+    bool discard;
+
+    static constexpr u32 COPY_FULL = 0;
+
+    static constexpr SourceToBufferInfo
+    after_discard(const void *source_bytes, u32 byte_offset, u32 num_bytes = COPY_FULL) {
+        SourceToBufferInfo info = {};
+        info.source_bytes = source_bytes;
+        info.num_bytes = num_bytes;
+        info.byte_offset = byte_offset;
+        info.discard = true;
+
+        return info;
+    }
+
+    static constexpr SourceToBufferInfo
+    dont_discard(const void *source_bytes, u32 byte_offset, u32 num_bytes = COPY_FULL) {
+        SourceToBufferInfo info = {};
+        info.source_bytes = source_bytes;
+        info.num_bytes = num_bytes;
+        info.byte_offset = byte_offset;
+        info.discard = false;
+
+        return info;
+    }
+};
+
+void source_to_uniform_buffer(RenderManager &self, UniformBufferHandle ubo, SourceToBufferInfo source_info);
 
 struct PixelBufferCopyInfo {
     RMResourceID16 rmid = 0;
