@@ -5,3 +5,4 @@ CMakeLists.txt.user
 .vscode/
 compile_commands.json
 captures
+.cquery_cache

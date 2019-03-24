@@ -19,17 +19,21 @@ static eng::BlendFunctionDesc blendfunc_desc = eng::default_blendfunc_state;
 static eng::StartGLParams glparams = {};
 
 struct App {
-	// Set this to specify the range of 3D positions over which we generate the data set.
+	// Set this to specify the range of 3D positions over which we generate the data set, basically an AABB
 	f32 domain_start = -1.0;
 	f32 domain_end = 1.0;
 	u32 texture_resolution = 64;
+	u32 point_grid_resolution = 128;
 
-	GLuint scalar_field_tex;
+	GLuint volume_texture;
+	GLuint volume_sampler;
 	GLuint cube_vbo, cube_ebo, pos3d_vao;
 	u32 cube_num_indices;
 	GLuint view_proj_ubo;
 	GLuint prog_single_pass;
 	GLuint volume_sampler_unit;
+	GLuint points_vbo;
+	u32 num_points;
 
 	eng::Camera camera;
 	ViewProjEtc view_proj_etc;
@@ -39,8 +43,9 @@ struct App {
 
 // A 3d texture denoting.. values defined over a sphere volume. resolution is the number of texels in the x, y
 // and z direction, so our texture is a cube. Should be simple enough.
-void make_3d_texture(App &app, u32 resolution)
+void make_3d_texture(App &app)
 {
+	const u32 resolution = app.texture_resolution;
 	const u32 num_texels = resolution * resolution * resolution;
 	fo::Array<f32> values;
 	fo::resize(values, num_texels);
@@ -73,9 +78,18 @@ void make_3d_texture(App &app, u32 resolution)
 	glTextureSubImage3D(
 	  tex, 0, 0, 0, 0, resolution, resolution, resolution, GL_RED, GL_FLOAT, fo::data(values));
 
+	eng::set_texture_label(tex, "tex3d@volume_texture");
+
 	LOG_F(INFO, "....Created GL texture object");
 
-	app.scalar_field_tex = tex;
+	app.volume_texture = tex;
+
+	// Make the sampler object
+	eng::SamplerDesc sampler_desc = eng::default_sampler_desc;
+	sampler_desc.mag_filter = GL_LINEAR;
+	sampler_desc.min_filter = GL_LINEAR_MIPMAP_LINEAR;
+	sampler_desc.addrmode_u = sampler_desc.addrmode_v = sampler_desc.addrmode_w = GL_CLAMP_TO_EDGE;
+	app.volume_sampler = eng::make_sampler_object(sampler_desc);
 }
 
 void make_unit_cube_vbo(App &app)
@@ -86,6 +100,8 @@ void make_unit_cube_vbo(App &app)
 
 	eng::mesh::Model model;
 	eng::load_cube_mesh(model, identity_matrix, false, false);
+	// TODO: transform should scale the cube into half-radius (domain_end - domain_start) / 2. But
+	// identity_matrix corresponds using domain_start = -1 and domain_end = 1.
 
 	const auto &m = model[0];
 	const u32 vbo_size = m.o.get_vertices_size_in_bytes();
@@ -113,6 +129,43 @@ void make_unit_cube_vbo(App &app)
 	eng::set_vao_label(app.pos3d_vao, "vao@pos_3d");
 	eng::set_buffer_label(app.cube_vbo, "vbo@cube");
 	eng::set_buffer_label(app.cube_ebo, "ebo@cube");
+}
+
+void make_point_distribution_vbo(App &app)
+{
+	const u32 point_grid_resolution = app.point_grid_resolution;
+	fo::Array<fo::Vector3> point_values;
+	fo::resize(point_values, point_grid_resolution * point_grid_resolution * point_grid_resolution);
+
+	// Cell length in units of domain size
+	f32 cell_length = (app.domain_end - app.domain_start) / f32(point_grid_resolution);
+
+	// Starting position of domain (in local space only).
+	const fo::Vector3 domain_start_position = { app.domain_start, app.domain_start, app.domain_start };
+
+	for (f32 k = 0; k < point_grid_resolution; ++k) {
+		for (f32 j = 0; j < point_grid_resolution; ++j) {
+			for (f32 i = 0; i < point_grid_resolution; ++i) {
+				const u32 texel =
+				  (u32)(k * (point_grid_resolution * point_grid_resolution) + j * point_grid_resolution + i);
+
+				point_values[texel] =
+				  domain_start_position + fo::Vector3{ (i)*cell_length, (j)*cell_length, (k)*cell_length };
+			}
+		}
+	}
+
+	LOG_F(INFO, "...Done generating point grid");
+
+	// Make vbo
+
+	GLuint vbo;
+	glGenBuffers(1, &vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+	glBufferData(GL_ARRAY_BUFFER, vec_bytes(point_values), fo::data(point_values), GL_STATIC_DRAW);
+
+	app.points_vbo = vbo;
+	app.num_points = fo::size(point_values);
 }
 
 void make_uniform_buffers(App &app)
@@ -162,8 +215,9 @@ namespace app_loop
 		  0.2f, 1000.0f, 70.0 * one_deg_in_rad, glparams.window_height / float(glparams.window_width));
 
 		make_unit_cube_vbo(app);
-		make_3d_texture(app, app.texture_resolution);
+		make_3d_texture(app);
 		make_uniform_buffers(app);
+		make_point_distribution_vbo(app);
 
 		load_programs(app);
 
@@ -199,16 +253,22 @@ namespace app_loop
 
 		glUseProgram(app.prog_single_pass);
 
+		glBindTextureUnit(app.volume_sampler_unit, app.volume_texture);
+		glBindSampler(app.volume_sampler_unit, app.volume_sampler);
+
 		glInvalidateBufferData(app.view_proj_ubo);
 		glBindBuffer(GL_UNIFORM_BUFFER, app.view_proj_ubo);
 		glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(ViewProjEtc), (void *)&app.view_proj_etc);
 		glBindBufferRange(GL_UNIFORM_BUFFER, 0, app.view_proj_ubo, 0, sizeof(ViewProjEtc));
 
 		glBindVertexArray(app.pos3d_vao);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.cube_ebo);
-		glBindVertexBuffer(0, app.cube_vbo, 0, sizeof(fo::Vector3));
+		// glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.cube_ebo);
+		// glBindVertexBuffer(0, app.cube_vbo, 0, sizeof(fo::Vector3));
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		glBindVertexBuffer(0, app.points_vbo, 0, sizeof(fo::Vector3));
 
-		glDrawElements(GL_TRIANGLES, app.cube_num_indices, GL_UNSIGNED_SHORT, (const void *)0);
+		// glDrawElements(GL_TRIANGLES, app.cube_num_indices, GL_UNSIGNED_SHORT, (const void *)0);
+		glDrawArrays(GL_POINTS, 0, app.num_points);
 		glfwSwapBuffers(eng::gl().window);
 	}
 
@@ -229,6 +289,7 @@ int main()
 	glparams.window_width = 800;
 	glparams.window_height = 800;
 	glparams.window_title = "single pass raycast";
+	glparams.clear_color = colors::PowderBlue;
 	eng::start_gl(glparams);
 
 	app_loop::State timer{};
