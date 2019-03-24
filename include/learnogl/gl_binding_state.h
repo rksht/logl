@@ -102,6 +102,8 @@ constexpr SamplerDesc default_sampler_desc = { GL_LINEAR, GL_NEAREST_MIPMAP_LINE
                                                0.0f, // 1.0f to MAX_ANISOTROPY denotes a valid range
                                                -1000.0f,  1000.0f };
 
+GLuint make_sampler_object(const SamplerDesc &sampler_desc);
+
 // Set the in-built sampler parameters of the texture
 void set_texture_parameters(GLuint texture, const SamplerDesc &sampler_desc);
 

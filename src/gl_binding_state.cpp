@@ -10,7 +10,7 @@ static constexpr AddrUint STARTING_ALLOCATOR_SIZE = 4 * 1024;
 
 namespace eng {
 
-static GLuint make_sampler_object(const SamplerDesc &sampler_desc);
+GLuint make_sampler_object(const SamplerDesc &sampler_desc);
 GLuint make_vao(const VaoFormatDesc &vao_format);
 
 void set_gl_depth_stencil_state(const DepthStencilStateDesc &ds);
@@ -328,7 +328,7 @@ GLuint BindingState::get_vao(const VaoFormatDesc &vao_format_desc) {
 
 void BindingState::seal() { _sealed = true; }
 
-static GLuint make_sampler_object(const SamplerDesc &sampler_desc) {
+GLuint make_sampler_object(const SamplerDesc &sampler_desc) {
     GLuint sampler_object;
     glGenSamplers(1, &sampler_object);
 
