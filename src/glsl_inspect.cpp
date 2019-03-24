@@ -49,7 +49,8 @@ InspectedGLSL::InspectedGLSL(GLuint handle, pmr::memory_resource &pmr)
     }
 }
 
-void InspectedGLSL::GetComputeShaderWorkGroupSize(GLint &numXThreads, GLint &numYThreads,
+void InspectedGLSL::GetComputeShaderWorkGroupSize(GLint &numXThreads,
+                                                  GLint &numYThreads,
                                                   GLint &numZThreads) const {
     GLint workGroupSize[3];
     glGetProgramiv(mHandle, GL_COMPUTE_WORK_GROUP_SIZE, workGroupSize);
@@ -143,7 +144,10 @@ void InspectedGLSL::Print(fo::string_stream::Buffer &ss) const {
             ss << "; //";
             ss << " offset=" << uniform.offset;
             ss << " size="
-               << GetEnumSize(uniform.type, uniform.arraySize, uniform.arrayStride, uniform.matrixStride,
+               << GetEnumSize(uniform.type,
+                              uniform.arraySize,
+                              uniform.arrayStride,
+                              uniform.matrixStride,
                               uniform.isRowMajor);
             if (uniform.arrayStride > 0) {
                 ss << " arrayStride=" << uniform.arrayStride;
@@ -190,7 +194,10 @@ void InspectedGLSL::Print(fo::string_stream::Buffer &ss) const {
             ss << "matrix stride = " << uniform.matrixStride << "\n";
             ss << "is row major = " << uniform.isRowMajor << "\n";
             ss << "size="
-               << GetEnumSize(uniform.type, uniform.arraySize, uniform.arrayStride, uniform.matrixStride,
+               << GetEnumSize(uniform.type,
+                              uniform.arraySize,
+                              uniform.arrayStride,
+                              uniform.matrixStride,
                               uniform.isRowMajor)
                << "\n";
         }
@@ -277,8 +284,11 @@ void InspectedGLSL::Print(fo::string_stream::Buffer &ss) const {
             }
 
             ss << "; //";
-            auto const size = GetEnumSize(bufferVar.type, bufferVar.arraySize, bufferVar.arrayStride,
-                                          bufferVar.matrixStride, bufferVar.isRowMajor);
+            auto const size = GetEnumSize(bufferVar.type,
+                                          bufferVar.arraySize,
+                                          bufferVar.arrayStride,
+                                          bufferVar.matrixStride,
+                                          bufferVar.isRowMajor);
             if (size > 0) {
                 ss << " size=" << size;
             }
@@ -325,8 +335,11 @@ void InspectedGLSL::Print(fo::string_stream::Buffer &ss) const {
             ss << "is row major = " << bufferVar.isRowMajor << "\n";
             ss << "top level array size = " << bufferVar.topLevelArraySize << "\n";
             ss << "top level array stride = " << bufferVar.topLevelArrayStride << "\n";
-            auto const size = GetEnumSize(bufferVar.type, bufferVar.arraySize, bufferVar.arrayStride,
-                                          bufferVar.matrixStride, bufferVar.isRowMajor);
+            auto const size = GetEnumSize(bufferVar.type,
+                                          bufferVar.arraySize,
+                                          bufferVar.arrayStride,
+                                          bufferVar.matrixStride,
+                                          bufferVar.isRowMajor);
             if (size > 0) {
                 ss << "size=" << size << "\n";
             }
@@ -350,23 +363,23 @@ void InspectedGLSL::ReflectProgramInputs() {
     if (numResources > 0) {
         mInputs.resize(numResources);
 
-        GLenum properties[] = {GL_NAME_LENGTH,
-                               GL_TYPE,
-                               GL_LOCATION,
-                               GL_ARRAY_SIZE,
-                               GL_REFERENCED_BY_VERTEX_SHADER,
-                               GL_REFERENCED_BY_GEOMETRY_SHADER,
-                               GL_REFERENCED_BY_FRAGMENT_SHADER,
-                               GL_REFERENCED_BY_COMPUTE_SHADER,
-                               GL_REFERENCED_BY_TESS_CONTROL_SHADER,
-                               GL_REFERENCED_BY_TESS_EVALUATION_SHADER,
-                               GL_IS_PER_PATCH};
+        GLenum properties[] = { GL_NAME_LENGTH,
+                                GL_TYPE,
+                                GL_LOCATION,
+                                GL_ARRAY_SIZE,
+                                GL_REFERENCED_BY_VERTEX_SHADER,
+                                GL_REFERENCED_BY_GEOMETRY_SHADER,
+                                GL_REFERENCED_BY_FRAGMENT_SHADER,
+                                GL_REFERENCED_BY_COMPUTE_SHADER,
+                                GL_REFERENCED_BY_TESS_CONTROL_SHADER,
+                                GL_REFERENCED_BY_TESS_EVALUATION_SHADER,
+                                GL_IS_PER_PATCH };
         int const numProperties = sizeof(properties) / sizeof(int);
-        GLint results[numProperties] = {0};
+        GLint results[numProperties] = { 0 };
         for (int i = 0; i < numResources; ++i) {
             Input &info = mInputs[i];
-            glGetProgramResourceiv(mHandle, GL_PROGRAM_INPUT, i, numProperties, properties, numProperties,
-                                   nullptr, results);
+            glGetProgramResourceiv(
+                mHandle, GL_PROGRAM_INPUT, i, numProperties, properties, numProperties, nullptr, results);
 
             GLint numBytes = results[0] + 1;
             std::vector<GLchar> name(numBytes);
@@ -395,24 +408,24 @@ void InspectedGLSL::ReflectProgramOutputs() {
     if (numResources > 0) {
         mOutputs.resize(numResources);
 
-        GLenum properties[] = {GL_NAME_LENGTH,
-                               GL_TYPE,
-                               GL_LOCATION,
-                               GL_ARRAY_SIZE,
-                               GL_REFERENCED_BY_VERTEX_SHADER,
-                               GL_REFERENCED_BY_GEOMETRY_SHADER,
-                               GL_REFERENCED_BY_FRAGMENT_SHADER,
-                               GL_REFERENCED_BY_COMPUTE_SHADER,
-                               GL_REFERENCED_BY_TESS_CONTROL_SHADER,
-                               GL_REFERENCED_BY_TESS_EVALUATION_SHADER,
-                               GL_IS_PER_PATCH,
-                               GL_LOCATION_INDEX};
+        GLenum properties[] = { GL_NAME_LENGTH,
+                                GL_TYPE,
+                                GL_LOCATION,
+                                GL_ARRAY_SIZE,
+                                GL_REFERENCED_BY_VERTEX_SHADER,
+                                GL_REFERENCED_BY_GEOMETRY_SHADER,
+                                GL_REFERENCED_BY_FRAGMENT_SHADER,
+                                GL_REFERENCED_BY_COMPUTE_SHADER,
+                                GL_REFERENCED_BY_TESS_CONTROL_SHADER,
+                                GL_REFERENCED_BY_TESS_EVALUATION_SHADER,
+                                GL_IS_PER_PATCH,
+                                GL_LOCATION_INDEX };
         int const numProperties = sizeof(properties) / sizeof(int);
-        GLint results[numProperties] = {0};
+        GLint results[numProperties] = { 0 };
         for (int i = 0; i < numResources; ++i) {
             Output &info = mOutputs[i];
-            glGetProgramResourceiv(mHandle, GL_PROGRAM_OUTPUT, i, numProperties, properties, numProperties,
-                                   nullptr, results);
+            glGetProgramResourceiv(
+                mHandle, GL_PROGRAM_OUTPUT, i, numProperties, properties, numProperties, nullptr, results);
 
             GLint numBytes = results[0] + 1;
             std::vector<GLchar> name(numBytes);
@@ -436,6 +449,58 @@ void InspectedGLSL::ReflectProgramOutputs() {
     }
 }
 
+static constexpr GLint k_sampler_types_list[] = {
+    GL_SAMPLER_1D,
+    GL_SAMPLER_2D,
+    GL_SAMPLER_3D,
+    GL_SAMPLER_CUBE,
+    GL_SAMPLER_1D_SHADOW,
+    GL_SAMPLER_2D_SHADOW,
+    GL_SAMPLER_CUBE_SHADOW,
+    GL_SAMPLER_1D_ARRAY,
+    GL_SAMPLER_2D_ARRAY,
+    GL_SAMPLER_CUBE_MAP_ARRAY,
+    GL_SAMPLER_1D_ARRAY_SHADOW,
+    GL_SAMPLER_2D_ARRAY_SHADOW,
+    GL_SAMPLER_CUBE_MAP_ARRAY_SHADOW,
+};
+
+static constexpr GLint k_1D_samplers[] = {
+    GL_SAMPLER_1D,
+    GL_SAMPLER_1D_SHADOW,
+    GL_SAMPLER_1D_ARRAY,
+    GL_SAMPLER_1D_ARRAY_SHADOW,
+};
+
+static constexpr GLint k_2D_samplers[] = {
+    GL_SAMPLER_2D,
+    GL_SAMPLER_2D_SHADOW,
+    GL_SAMPLER_2D_ARRAY,
+    GL_SAMPLER_2D_ARRAY_SHADOW,
+};
+
+static constexpr GLint k_3D_samplers[] = { GL_SAMPLER_3D };
+
+static constexpr GLint k_plain_samplers[] = {
+    GL_SAMPLER_1D, GL_SAMPLER_2D, GL_SAMPLER_3D, GL_SAMPLER_CUBE, GL_SAMPLER_1D_SHADOW, GL_SAMPLER_2D_SHADOW,
+};
+
+static constexpr GLint k_shadow_samplers[] = {
+    GL_SAMPLER_1D_SHADOW,       GL_SAMPLER_2D_SHADOW,       GL_SAMPLER_CUBE_SHADOW,
+    GL_SAMPLER_1D_ARRAY_SHADOW, GL_SAMPLER_2D_ARRAY_SHADOW, GL_SAMPLER_CUBE_MAP_ARRAY_SHADOW,
+};
+
+static constexpr GLint k_arrayed_samplers[] = {
+    GL_SAMPLER_1D_ARRAY,        GL_SAMPLER_2D_ARRAY,        GL_SAMPLER_CUBE_MAP_ARRAY,
+    GL_SAMPLER_1D_ARRAY_SHADOW, GL_SAMPLER_2D_ARRAY_SHADOW, GL_SAMPLER_CUBE_MAP_ARRAY_SHADOW,
+};
+
+static constexpr GLint k_cube_samplers[] = {
+    GL_SAMPLER_CUBE,
+    GL_SAMPLER_CUBE_SHADOW,
+    GL_SAMPLER_CUBE_MAP_ARRAY,
+};
+
 void InspectedGLSL::ReflectUniforms() {
     GLint numResources = 0;
     glGetProgramInterfaceiv(mHandle, GL_UNIFORM, GL_ACTIVE_RESOURCES, &numResources);
@@ -443,28 +508,28 @@ void InspectedGLSL::ReflectUniforms() {
     if (numResources > 0) {
         mUniforms.clear();
 
-        GLenum properties[] = {GL_NAME_LENGTH,
-                               GL_TYPE,
-                               GL_LOCATION,
-                               GL_ARRAY_SIZE,
-                               GL_OFFSET,
-                               GL_BLOCK_INDEX,
-                               GL_ARRAY_STRIDE,
-                               GL_MATRIX_STRIDE,
-                               GL_IS_ROW_MAJOR,
-                               GL_ATOMIC_COUNTER_BUFFER_INDEX,
-                               GL_REFERENCED_BY_VERTEX_SHADER,
-                               GL_REFERENCED_BY_GEOMETRY_SHADER,
-                               GL_REFERENCED_BY_FRAGMENT_SHADER,
-                               GL_REFERENCED_BY_COMPUTE_SHADER,
-                               GL_REFERENCED_BY_TESS_CONTROL_SHADER,
-                               GL_REFERENCED_BY_TESS_EVALUATION_SHADER};
+        GLenum properties[] = { GL_NAME_LENGTH,
+                                GL_TYPE,
+                                GL_LOCATION,
+                                GL_ARRAY_SIZE,
+                                GL_OFFSET,
+                                GL_BLOCK_INDEX,
+                                GL_ARRAY_STRIDE,
+                                GL_MATRIX_STRIDE,
+                                GL_IS_ROW_MAJOR,
+                                GL_ATOMIC_COUNTER_BUFFER_INDEX,
+                                GL_REFERENCED_BY_VERTEX_SHADER,
+                                GL_REFERENCED_BY_GEOMETRY_SHADER,
+                                GL_REFERENCED_BY_FRAGMENT_SHADER,
+                                GL_REFERENCED_BY_COMPUTE_SHADER,
+                                GL_REFERENCED_BY_TESS_CONTROL_SHADER,
+                                GL_REFERENCED_BY_TESS_EVALUATION_SHADER };
         int const numProperties = sizeof(properties) / sizeof(int);
-        GLint results[numProperties] = {0};
+        GLint results[numProperties] = { 0 };
         for (int i = 0; i < numResources; ++i) {
             Uniform info;
-            glGetProgramResourceiv(mHandle, GL_UNIFORM, i, numProperties, properties, numProperties, nullptr,
-                                   results);
+            glGetProgramResourceiv(
+                mHandle, GL_UNIFORM, i, numProperties, properties, numProperties, nullptr, results);
 
             GLint numBytes = results[0] + 1;
             std::vector<GLchar> name(numBytes);
@@ -476,6 +541,7 @@ void InspectedGLSL::ReflectUniforms() {
             info.location = *current++;
             info.arraySize = *current++;
             info.offset = *current++;
+
             info.blockIndex = *current++;
             info.arrayStride = *current++;
             info.matrixStride = *current++;
@@ -518,6 +584,23 @@ void InspectedGLSL::ReflectUniforms() {
                 }
             }
 
+            if (::contains(STD_BEGIN_END(k_sampler_types_list), info.type)) {
+                // Check sampler info
+                SamplerUniformInfo sampler_info = {};
+                sampler_info.isArray = ::contains(STD_BEGIN_END(k_arrayed_samplers), info.type);
+                sampler_info.isShadow = ::contains(STD_BEGIN_END(k_shadow_samplers), info.type);
+                sampler_info.isCube = std::find(STD_BEGIN_END(k_cube_samplers), info.type);
+                sampler_info.is1D = std::find(STD_BEGIN_END(k_1D_samplers), info.type);
+                sampler_info.is2D = std::find(STD_BEGIN_END(k_2D_samplers), info.type);
+                sampler_info.is3D = std::find(STD_BEGIN_END(k_3D_samplers), info.type);
+
+                // Get texture unit this sampler will be bound to by default
+                GLint texture_unit = 0;
+                glGetUniformiv(mHandle, info.location, &texture_unit);
+                sampler_info.textureUnit = texture_unit;
+                info.optSamplerInfo = sampler_info;
+            }
+
             mUniforms.push_back(info);
         }
     }
@@ -530,22 +613,22 @@ void InspectedGLSL::ReflectDataBlocks(GLenum programInterface, pmr::vector<DataB
     if (numResources > 0) {
         blocks.resize(numResources);
 
-        GLenum properties[] = {GL_NAME_LENGTH,
-                               GL_BUFFER_BINDING,
-                               GL_BUFFER_DATA_SIZE,
-                               GL_REFERENCED_BY_VERTEX_SHADER,
-                               GL_REFERENCED_BY_GEOMETRY_SHADER,
-                               GL_REFERENCED_BY_FRAGMENT_SHADER,
-                               GL_REFERENCED_BY_COMPUTE_SHADER,
-                               GL_REFERENCED_BY_TESS_CONTROL_SHADER,
-                               GL_REFERENCED_BY_TESS_EVALUATION_SHADER,
-                               GL_NUM_ACTIVE_VARIABLES};
+        GLenum properties[] = { GL_NAME_LENGTH,
+                                GL_BUFFER_BINDING,
+                                GL_BUFFER_DATA_SIZE,
+                                GL_REFERENCED_BY_VERTEX_SHADER,
+                                GL_REFERENCED_BY_GEOMETRY_SHADER,
+                                GL_REFERENCED_BY_FRAGMENT_SHADER,
+                                GL_REFERENCED_BY_COMPUTE_SHADER,
+                                GL_REFERENCED_BY_TESS_CONTROL_SHADER,
+                                GL_REFERENCED_BY_TESS_EVALUATION_SHADER,
+                                GL_NUM_ACTIVE_VARIABLES };
         int const numProperties = sizeof(properties) / sizeof(int);
-        GLint results[numProperties] = {0};
+        GLint results[numProperties] = { 0 };
         for (int i = 0; i < numResources; ++i) {
             DataBlock &info = blocks[i];
-            glGetProgramResourceiv(mHandle, programInterface, i, numProperties, properties, numProperties,
-                                   nullptr, results);
+            glGetProgramResourceiv(
+                mHandle, programInterface, i, numProperties, properties, numProperties, nullptr, results);
 
             GLint numBytes = results[0] + 1;
             std::vector<GLchar> name(numBytes);
@@ -574,8 +657,14 @@ void InspectedGLSL::ReflectDataBlocks(GLenum programInterface, pmr::vector<DataB
                 info.activeVariables.resize(numActiveVariables);
                 std::fill(info.activeVariables.begin(), info.activeVariables.end(), 0);
                 GLenum varProperty = GL_ACTIVE_VARIABLES;
-                glGetProgramResourceiv(mHandle, programInterface, i, 1, &varProperty, numActiveVariables,
-                                       nullptr, &info.activeVariables[0]);
+                glGetProgramResourceiv(mHandle,
+                                       programInterface,
+                                       i,
+                                       1,
+                                       &varProperty,
+                                       numActiveVariables,
+                                       nullptr,
+                                       &info.activeVariables[0]);
             }
         }
     }
@@ -588,21 +677,27 @@ void InspectedGLSL::ReflectAtomicCounterBuffers() {
     if (numResources > 0) {
         mAtomicCounterBuffers.resize(numResources);
 
-        GLenum properties[] = {GL_BUFFER_BINDING,
-                               GL_BUFFER_DATA_SIZE,
-                               GL_REFERENCED_BY_VERTEX_SHADER,
-                               GL_REFERENCED_BY_GEOMETRY_SHADER,
-                               GL_REFERENCED_BY_FRAGMENT_SHADER,
-                               GL_REFERENCED_BY_COMPUTE_SHADER,
-                               GL_REFERENCED_BY_TESS_CONTROL_SHADER,
-                               GL_REFERENCED_BY_TESS_EVALUATION_SHADER,
-                               GL_NUM_ACTIVE_VARIABLES};
+        GLenum properties[] = { GL_BUFFER_BINDING,
+                                GL_BUFFER_DATA_SIZE,
+                                GL_REFERENCED_BY_VERTEX_SHADER,
+                                GL_REFERENCED_BY_GEOMETRY_SHADER,
+                                GL_REFERENCED_BY_FRAGMENT_SHADER,
+                                GL_REFERENCED_BY_COMPUTE_SHADER,
+                                GL_REFERENCED_BY_TESS_CONTROL_SHADER,
+                                GL_REFERENCED_BY_TESS_EVALUATION_SHADER,
+                                GL_NUM_ACTIVE_VARIABLES };
         int const numProperties = sizeof(properties) / sizeof(int);
-        GLint results[numProperties] = {0};
+        GLint results[numProperties] = { 0 };
         for (int i = 0; i < numResources; ++i) {
             AtomicCounterBuffer &info = mAtomicCounterBuffers[i];
-            glGetProgramResourceiv(mHandle, GL_ATOMIC_COUNTER_BUFFER, i, numProperties, properties,
-                                   numProperties, nullptr, results);
+            glGetProgramResourceiv(mHandle,
+                                   GL_ATOMIC_COUNTER_BUFFER,
+                                   i,
+                                   numProperties,
+                                   properties,
+                                   numProperties,
+                                   nullptr,
+                                   results);
 
             GLint *current = &results[0];
             info.bufferBinding = *current++;
@@ -619,8 +714,14 @@ void InspectedGLSL::ReflectAtomicCounterBuffers() {
                 info.activeVariables.resize(numActiveVariables);
                 std::fill(info.activeVariables.begin(), info.activeVariables.end(), 0);
                 GLenum varProperty = GL_ACTIVE_VARIABLES;
-                glGetProgramResourceiv(mHandle, GL_ATOMIC_COUNTER_BUFFER, i, 1, &varProperty,
-                                       numActiveVariables, nullptr, &info.activeVariables[0]);
+                glGetProgramResourceiv(mHandle,
+                                       GL_ATOMIC_COUNTER_BUFFER,
+                                       i,
+                                       1,
+                                       &varProperty,
+                                       numActiveVariables,
+                                       nullptr,
+                                       &info.activeVariables[0]);
             }
         }
     }
@@ -653,13 +754,13 @@ void InspectedGLSL::ReflectSubroutineUniforms(GLenum programInterface,
     if (numResources > 0) {
         subUniforms.resize(numResources);
 
-        GLenum properties[] = {GL_NAME_LENGTH, GL_LOCATION, GL_ARRAY_SIZE, GL_NUM_ACTIVE_VARIABLES};
+        GLenum properties[] = { GL_NAME_LENGTH, GL_LOCATION, GL_ARRAY_SIZE, GL_NUM_ACTIVE_VARIABLES };
         int const numProperties = sizeof(properties) / sizeof(int);
-        GLint results[numProperties] = {0};
+        GLint results[numProperties] = { 0 };
         for (int i = 0; i < numResources; ++i) {
             SubroutineUniform &info = subUniforms[i];
-            glGetProgramResourceiv(mHandle, programInterface, i, numProperties, properties, numProperties,
-                                   nullptr, results);
+            glGetProgramResourceiv(
+                mHandle, programInterface, i, numProperties, properties, numProperties, nullptr, results);
 
             GLint numBytes = results[0] + 1;
             std::vector<GLchar> name(numBytes);
@@ -675,8 +776,14 @@ void InspectedGLSL::ReflectSubroutineUniforms(GLenum programInterface,
                 info.compatibleSubroutines.resize(numCompatibleSubroutines);
                 std::fill(info.compatibleSubroutines.begin(), info.compatibleSubroutines.end(), 0);
                 GLenum subProperty = GL_COMPATIBLE_SUBROUTINES;
-                glGetProgramResourceiv(mHandle, programInterface, i, 1, &subProperty,
-                                       numCompatibleSubroutines, nullptr, &info.compatibleSubroutines[0]);
+                glGetProgramResourceiv(mHandle,
+                                       programInterface,
+                                       i,
+                                       1,
+                                       &subProperty,
+                                       numCompatibleSubroutines,
+                                       nullptr,
+                                       &info.compatibleSubroutines[0]);
             }
         }
     }
@@ -688,28 +795,28 @@ void InspectedGLSL::ReflectBufferVariables() {
     if (numResources > 0) {
         mBufferVariables.resize(numResources);
 
-        GLenum properties[] = {GL_NAME_LENGTH,
-                               GL_TYPE,
-                               GL_ARRAY_SIZE,
-                               GL_OFFSET,
-                               GL_BLOCK_INDEX,
-                               GL_ARRAY_STRIDE,
-                               GL_MATRIX_STRIDE,
-                               GL_IS_ROW_MAJOR,
-                               GL_TOP_LEVEL_ARRAY_SIZE,
-                               GL_TOP_LEVEL_ARRAY_STRIDE,
-                               GL_REFERENCED_BY_VERTEX_SHADER,
-                               GL_REFERENCED_BY_GEOMETRY_SHADER,
-                               GL_REFERENCED_BY_FRAGMENT_SHADER,
-                               GL_REFERENCED_BY_COMPUTE_SHADER,
-                               GL_REFERENCED_BY_TESS_CONTROL_SHADER,
-                               GL_REFERENCED_BY_TESS_EVALUATION_SHADER};
+        GLenum properties[] = { GL_NAME_LENGTH,
+                                GL_TYPE,
+                                GL_ARRAY_SIZE,
+                                GL_OFFSET,
+                                GL_BLOCK_INDEX,
+                                GL_ARRAY_STRIDE,
+                                GL_MATRIX_STRIDE,
+                                GL_IS_ROW_MAJOR,
+                                GL_TOP_LEVEL_ARRAY_SIZE,
+                                GL_TOP_LEVEL_ARRAY_STRIDE,
+                                GL_REFERENCED_BY_VERTEX_SHADER,
+                                GL_REFERENCED_BY_GEOMETRY_SHADER,
+                                GL_REFERENCED_BY_FRAGMENT_SHADER,
+                                GL_REFERENCED_BY_COMPUTE_SHADER,
+                                GL_REFERENCED_BY_TESS_CONTROL_SHADER,
+                                GL_REFERENCED_BY_TESS_EVALUATION_SHADER };
         int const numProperties = sizeof(properties) / sizeof(int);
-        GLint results[numProperties] = {0};
+        GLint results[numProperties] = { 0 };
         for (int i = 0; i < numResources; ++i) {
             BufferVariable &info = mBufferVariables[i];
-            glGetProgramResourceiv(mHandle, GL_BUFFER_VARIABLE, i, numProperties, properties, numProperties,
-                                   nullptr, results);
+            glGetProgramResourceiv(
+                mHandle, GL_BUFFER_VARIABLE, i, numProperties, properties, numProperties, nullptr, results);
 
             GLint numBytes = results[0] + 1;
             std::vector<GLchar> name(numBytes);
@@ -775,18 +882,24 @@ void InspectedGLSL::ReflectTransformFeedbackVaryings() {
     if (numResources > 0) {
         mInputs.resize(numResources);
 
-        GLenum properties[] = {GL_NAME_LENGTH, GL_TYPE, GL_ARRAY_SIZE, GL_OFFSET};
+        GLenum properties[] = { GL_NAME_LENGTH, GL_TYPE, GL_ARRAY_SIZE, GL_OFFSET };
         int const numProperties = sizeof(properties) / sizeof(int);
-        GLint results[numProperties] = {0};
+        GLint results[numProperties] = { 0 };
         for (int i = 0; i < numResources; ++i) {
             TransformFeedbackVarying &info = mTransformFeedbackVaryings[i];
-            glGetProgramResourceiv(mHandle, GL_TRANSFORM_FEEDBACK_VARYING, i, numProperties, properties,
-                                   numProperties, nullptr, results);
+            glGetProgramResourceiv(mHandle,
+                                   GL_TRANSFORM_FEEDBACK_VARYING,
+                                   i,
+                                   numProperties,
+                                   properties,
+                                   numProperties,
+                                   nullptr,
+                                   results);
 
             GLint numBytes = results[0] + 1;
             std::vector<GLchar> name(numBytes);
-            glGetProgramResourceName(mHandle, GL_TRANSFORM_FEEDBACK_VARYING, i, numBytes, nullptr,
-                                     name.data());
+            glGetProgramResourceName(
+                mHandle, GL_TRANSFORM_FEEDBACK_VARYING, i, numBytes, nullptr, name.data());
             info.name = std::string(name.data());
 
             GLint *current = &results[1];
@@ -804,13 +917,19 @@ void InspectedGLSL::ReflectTransformFeedbackBuffers() {
     if (numResources > 0) {
         mTransformFeedbackBuffers.resize(numResources);
 
-        GLenum properties[] = {GL_BUFFER_BINDING, GL_NUM_ACTIVE_VARIABLES};
+        GLenum properties[] = { GL_BUFFER_BINDING, GL_NUM_ACTIVE_VARIABLES };
         int const numProperties = sizeof(properties) / sizeof(int);
-        GLint results[numProperties] = {0};
+        GLint results[numProperties] = { 0 };
         for (int i = 0; i < numResources; ++i) {
             TransformFeedbackBuffer &info = mTransformFeedbackBuffers[i];
-            glGetProgramResourceiv(mHandle, GL_TRANSFORM_FEEDBACK_BUFFER, i, numProperties, properties,
-                                   numProperties, nullptr, results);
+            glGetProgramResourceiv(mHandle,
+                                   GL_TRANSFORM_FEEDBACK_BUFFER,
+                                   i,
+                                   numProperties,
+                                   properties,
+                                   numProperties,
+                                   nullptr,
+                                   results);
 
             GLint *current = &results[0];
             info.bufferBinding = *current++;
@@ -821,15 +940,21 @@ void InspectedGLSL::ReflectTransformFeedbackBuffers() {
                 info.activeVariables.resize(numActiveVariables);
                 std::fill(info.activeVariables.begin(), info.activeVariables.end(), 0);
                 GLenum varProperty = GL_ACTIVE_VARIABLES;
-                glGetProgramResourceiv(mHandle, GL_TRANSFORM_FEEDBACK_BUFFER, i, 1, &varProperty,
-                                       numActiveVariables, nullptr, &info.activeVariables[0]);
+                glGetProgramResourceiv(mHandle,
+                                       GL_TRANSFORM_FEEDBACK_BUFFER,
+                                       i,
+                                       1,
+                                       &varProperty,
+                                       numActiveVariables,
+                                       nullptr,
+                                       &info.activeVariables[0]);
             }
         }
     }
 }
 
-unsigned InspectedGLSL::GetEnumSize(GLenum value, GLint arraySize, GLint arrayStride, GLint matrixStride,
-                                    GLint isRowMajor) {
+unsigned InspectedGLSL::GetEnumSize(
+    GLenum value, GLint arraySize, GLint arrayStride, GLint matrixStride, GLint isRowMajor) {
     for (int i = 0; 0 != msEnumMap[i].value; ++i) {
         auto const &item = msEnumMap[i];
         if (item.value == value) {
@@ -1086,7 +1211,8 @@ const InspectedGLSL::EnumMap InspectedGLSL::msEnumMap[]{
     ENUM(GL_UNSIGNED_INT_IMAGE_BUFFER, uimageBuffer, 0, 0, 0),
     ENUM(GL_UNSIGNED_INT_IMAGE_2D_RECT, uimage2DRect, 0, 0, 0),
     ENUM(GL_UNSIGNED_INT_ATOMIC_COUNTER, atomic_uint, 0, 0, 0),
-    {0, "", "", 0, 0, 0}};
+    { 0, "", "", 0, 0, 0 }
+};
 #undef ENUM
 
 } // namespace eng

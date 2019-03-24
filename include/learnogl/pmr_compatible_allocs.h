@@ -11,14 +11,17 @@
 
 #if __has_include(<memory_resource>)
 
-#include <memory_resource>
+#    include <memory_resource>
 
 namespace pmr = std::pmr;
 
 // #pragma message("stdlib has <memory_resource>")
 #else
 
-#include <halpern_pmr/polymorphic_allocator.h>
+#    include <halpern_pmr/pmr_map.h>
+#    include <halpern_pmr/pmr_string.h>
+#    include <halpern_pmr/pmr_vector.h>
+#    include <halpern_pmr/polymorphic_allocator.h>
 
 namespace pmr = halpern::pmr;
 

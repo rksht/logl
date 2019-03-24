@@ -10,11 +10,9 @@
 
 #include <learnogl/typed_gl_resources.h>
 
+#include <learnogl/pmr_compatible_allocs.h>
 #include <map>
 #include <scaffold/string_stream.h>
-#include <set>
-#include <string>
-#include <vector>
 
 // Query a program object for all information relevant to manipulating the
 // program at run time.
@@ -51,6 +49,17 @@ class InspectedGLSL {
         GLint locationIndex;
     };
 
+    struct SamplerUniformInfo {
+        // Helper info if you want to quickly know the kind of sampler
+        bool isArray;
+        bool isShadow;
+        bool isCube;
+        bool is1D, is2D, is3D;
+
+        // In GL >= 4.2, the texture unit can be specified in GLSL source. This stores that.
+        GLint textureUnit;
+    };
+
     struct Uniform {
         std::string fullName;
         std::string name;
@@ -64,6 +73,7 @@ class InspectedGLSL {
         GLint isRowMajor;
         GLint atomicCounterBufferIndex;
         GLint referencedBy[6];
+        ::optional<SamplerUniformInfo> optSamplerInfo;
     };
 
     struct DataBlock {
@@ -181,8 +191,8 @@ class InspectedGLSL {
         unsigned size; // use 0 for opaques
     };
     static const EnumMap msEnumMap[];
-    static unsigned GetEnumSize(GLenum value, GLint arraySize, GLint arrayStride, GLint matrixStride,
-                                GLint isRowMajor);
+    static unsigned
+    GetEnumSize(GLenum value, GLint arraySize, GLint arrayStride, GLint matrixStride, GLint isRowMajor);
     static std::string GetEnumName(GLenum value);
     static std::string GetEnumShaderName(GLenum value);
     static std::string GetReferencedByShaderList(GLint const referencedBy[6]);

@@ -283,6 +283,11 @@ template <typename T, typename Element> void fill_array(T &array, const Element 
     std::fill(begin(array), end(array), elem);
 }
 
+template <typename InputIterator, typename T>
+bool contains(InputIterator begin, InputIterator end, const T &v) {
+    return std::any_of(begin, end, [&v](const auto &element) { return element == v; });
+}
+
 template <typename FoundIterator, typename EndIterator> struct FindWithEnd {
     FoundIterator res_it;
     FoundIterator end_it;
