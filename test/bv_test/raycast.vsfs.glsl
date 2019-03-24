@@ -13,13 +13,13 @@ layout(std140, binding = 0) uniform ViewProjEtc {
     layout(location = 0) in vec3 pos;
 
     out VsOut {
-        float4 object_space_corner_pos; // This are points in [-1, -1, -1] x [1, 1, 1]
+        vec4 object_space_corner_pos; // This are points in [-1, -1, -1] x [1, 1, 1]
     } vs_out;
 
     void main()
     {
         gl_Position = clip_from_view * view_from_world * vec4(pos, 1.0);
-        vs_out.object_space_corner_pos = pos;
+        vs_out.object_space_corner_pos = vec4(pos, 1.0);
     }
 
 #endif
@@ -30,14 +30,14 @@ layout(std140, binding = 0) uniform ViewProjEtc {
     layout(binding = 0) uniform sampler3D volume_sampler;
 
     in VsOut {
-        float4 object_space_corner_pos;
+        vec4 object_space_corner_pos;
     } fs_in;
 
-    out vec4 fs_out;  
+    out vec4 fs_out;
 
     void main()
     {
-        fs_out = vec4(1.0, 1.0, 1.0, 1.0);
+        fs_out = vec4(0.4, 0.0, 1.0, 1.0);
     }
 
 #endif

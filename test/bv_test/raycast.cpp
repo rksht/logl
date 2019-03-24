@@ -1,5 +1,3 @@
-// Simple raycasting done in weekend.
-
 #include <learnogl/app_loop.h>
 #include <learnogl/gl_misc.h>
 #include <learnogl/shader.h>
@@ -143,8 +141,14 @@ void load_programs(App &app)
 
 	// Sampler binding
 	int texture_unit = 0;
-	glGetUniformiv(program, glGetUniformLocation(program, "volume_sampler"), &texture_unit);
-	app.volume_sampler_unit = texture_unit;
+	const auto sampler_loc = glGetUniformLocation(program, "volume_sampler");
+	if (sampler_loc != -1) {
+		glGetUniformiv(program, sampler_loc, &texture_unit);
+		app.volume_sampler_unit = texture_unit;
+		LOG_F(INFO, "... Volume texture will be bound to unit %i", app.volume_sampler_unit);
+	} else {
+		app.volume_sampler_unit = 0;
+	}
 }
 
 namespace app_loop
@@ -153,6 +157,7 @@ namespace app_loop
 	template <> void init<App>(App &app)
 	{
 		app.camera.set_eye(eng::eye::toward_negz(1.0f));
+		app.camera.update_view_transform();
 		app.camera.set_proj(
 		  0.2f, 1000.0f, 70.0 * one_deg_in_rad, glparams.window_height / float(glparams.window_width));
 
@@ -172,8 +177,7 @@ namespace app_loop
 		// initialize render states. default suffices.
 		rast_state_desc.cull_side = GL_BACK;
 
-		LOG_F(INFO, "Done intializing, exiting");
-		exit(EXIT_SUCCESS);
+		LOG_F(INFO, "... Done intializing");
 	}
 
 	template <> void update<App>(App &app, app_loop::State &timer)
@@ -198,6 +202,7 @@ namespace app_loop
 		glInvalidateBufferData(app.view_proj_ubo);
 		glBindBuffer(GL_UNIFORM_BUFFER, app.view_proj_ubo);
 		glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(ViewProjEtc), (void *)&app.view_proj_etc);
+		glBindBufferRange(GL_UNIFORM_BUFFER, 0, app.view_proj_ubo, 0, sizeof(ViewProjEtc));
 
 		glBindVertexArray(app.pos3d_vao);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, app.cube_ebo);
@@ -207,7 +212,10 @@ namespace app_loop
 		glfwSwapBuffers(eng::gl().window);
 	}
 
-	template <> bool should_close<App>(App &app) { return app.should_close_app; }
+	template <> bool should_close<App>(App &app)
+	{
+		return glfwWindowShouldClose(eng::gl().window) || app.should_close_app;
+	}
 
 	template <> void close<App>(App &app) { eng::close_gl(glparams); }
 
