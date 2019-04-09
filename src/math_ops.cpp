@@ -179,10 +179,10 @@ void invert4x4(const Matrix4x4 *src, Matrix4x4 *dest) {
     d2 = dB * dC;
 
     //  iD = D*|A| - C*A#*B
-    iD = D * _mm_shuffle_ps(dA, dA, 0) - iD;
+    iD = D * simd::Vector4(_mm_shuffle_ps(dA, dA, 0)) - iD;
 
     //  iA = A*|D| - B*D#*C;
-    iA = A * _mm_shuffle_ps(dD, dD, 0) - iA;
+    iA = A * simd::Vector4(_mm_shuffle_ps(dD, dD, 0)) - iA;
 
     //  det = |A|*|D| + |B|*|C| - trace(A#*B*D#*C)
     det = d1 + d2 - d;
@@ -202,10 +202,10 @@ void invert4x4(const Matrix4x4 *src, Matrix4x4 *dest) {
     rd = rd ^ Sign_PNNP;
 
     //  iB = C*|B| - D*B#*A
-    iB = C * _mm_shuffle_ps(dB, dB, 0) - iB;
+    iB = C * simd::Vector4(_mm_shuffle_ps(dB, dB, 0)) - iB;
 
     //  iC = B*|C| - A*C#*D;
-    iC = B * _mm_shuffle_ps(dC, dC, 0) - iC;
+    iC = B * simd::Vector4(_mm_shuffle_ps(dC, dC, 0)) - iC;
 
     //  iX = iX / det
     iA = iA * rd;

@@ -73,7 +73,7 @@ int main() {
                                     { 0.0f, 1024.0f },
                                     { 1.0f, -1.0f },
                                     { -100.0f, 100.0f },
-                                    { -1.0f, 1.0f })
+                                    { -1.0f, 1.0f });
             // @rksht - Error over there ^. No semicolon.
 
             mul_and_print(m1, Vector4{ 0.0f, 1024.0f, 0.0f, 1.0f });

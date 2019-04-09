@@ -2,7 +2,7 @@
 
 #include <learnogl/callstack.h>
 
-#if defined(__linux__)
+#if defined(__linux__) || defined(__APPLE__)
 
 #    include <cxxabi.h>
 #    include <execinfo.h>
@@ -108,7 +108,7 @@ void print_callstack(Buffer &ss) {
     SymCleanup(GetCurrentProcess());
 }
 
-#elif defined(__linux__)
+#elif defined(__linux__) || defined(__APPLE__)
 
 void print_callstack(Buffer &ss) {
     void *array[64];

@@ -4,8 +4,10 @@
 #pragma once
 
 #include "nflibs.h"
-#include <functional>
 #include <scaffold/types.h>
+
+#include <functional>
+#include <string>
 
 namespace eng {
 

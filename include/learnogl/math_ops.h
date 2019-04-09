@@ -70,9 +70,9 @@ constexpr fo::Vector3 unit_x = { 1.0, 0.0, 0.0 };
 constexpr fo::Vector3 unit_y = { 0.0, 1.0, 0.0 };
 constexpr fo::Vector3 unit_z = { 0.0, 0.0, 1.0 };
 
-constexpr fo::Vector4 unit_x_4 = {1.0, 0.0, 0.0, 0.0};
-constexpr fo::Vector4 unit_y_4 = {0.0, 1.0, 0.0, 0.0};
-constexpr fo::Vector4 unit_z_4 = {0.0, 0.0, 1.0, 0.0};
+constexpr fo::Vector4 unit_x_4 = { 1.0, 0.0, 0.0, 0.0 };
+constexpr fo::Vector4 unit_y_4 = { 0.0, 1.0, 0.0, 0.0 };
+constexpr fo::Vector4 unit_z_4 = { 0.0, 0.0, 1.0, 0.0 };
 
 constexpr fo::Matrix4x4 identity_matrix =
     fo::Matrix4x4{ { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 }, { 0, 0, 0, 1 } };
@@ -435,9 +435,9 @@ constexpr inline bool operator==(const fo::IVector2 &a, const fo::IVector2 &b) {
 
 constexpr inline float square_magnitude(const fo::Vector2 &v) { return v.x * v.x + v.y * v.y; }
 
-NOT_CONSTEXPR_IN_MSVC inline float magnitude(const fo::Vector2 &v) { return std::sqrt(square_magnitude(v)); }
+inline float magnitude(const fo::Vector2 &v) { return std::sqrt(square_magnitude(v)); }
 
-NOT_CONSTEXPR_IN_MSVC inline fo::Vector2 &normalize_update(fo::Vector2 &v) {
+inline fo::Vector2 &normalize_update(fo::Vector2 &v) {
     float mag = magnitude(v);
     v.x /= mag;
     v.y /= mag;
@@ -759,22 +759,14 @@ inline void compute_orthogonal_complements(const fo::Vector3 &w, fo::Vector3 &u,
 
 /// Creates a quaternion representing a rotation about the given `axis`, which *must* be a unit vector, by
 /// the given `angle`.
-#if !defined(_MSC_VER)
-constexpr
-#endif
-    inline fo::Quaternion
-    versor_from_axis_angle(const fo::Vector3 &axis, float angle) {
+inline fo::Quaternion versor_from_axis_angle(const fo::Vector3 &axis, float angle) {
     const float s = std::sin(angle / 2);
     const float c = std::cos(angle / 2);
     return fo::Quaternion{ s * axis.x, s * axis.y, s * axis.z, c };
 }
 
 /// Calculates the axis and angle of the rotation represented by given versor
-#if !defined(_MSC_VER)
-constexpr
-#endif
-    inline std::pair<fo::Vector3, float>
-    axis_angle_from_versor(const fo::Quaternion &q) {
+inline std::pair<fo::Vector3, float> axis_angle_from_versor(const fo::Quaternion &q) {
     const float angle_by2 = std::acos(q.w);
     const float s = std::sin(angle_by2);
     return std::make_pair(fo::Vector3{ q.x / s, q.y / s, q.z / s }, angle_by2 * 2.0f);
@@ -870,8 +862,7 @@ inline fo::Matrix4x4 matrix_from_versor(const fo::Quaternion &q) {
 fo::Quaternion versor_from_matrix(const fo::Matrix4x4 &mat);
 
 /// Performs linear interpolation
-template <typename T, typename Real = f32>
-inline T lerp(const T &a, const T &b, Real alpha) {
+template <typename T, typename Real = f32> inline T lerp(const T &a, const T &b, Real alpha) {
     return (Real(1) - alpha) * a + alpha * b;
 }
 

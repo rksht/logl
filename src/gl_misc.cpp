@@ -2,21 +2,21 @@
 #include <glad/glad.h>
 
 #if defined(WIN32)
-#include <windows.h>
-#define GLFW_EXPOSE_NATIVE_WGL
-#define GLFW_EXPOSE_NATIVE_WIN32
+#    include <windows.h>
+#    define GLFW_EXPOSE_NATIVE_WGL
+#    define GLFW_EXPOSE_NATIVE_WIN32
 
-#define GLFWAPI __declspec(dllimport)
+#    define GLFWAPI __declspec(dllimport)
 
 #elif defined(__linux__)
-#include <dlfcn.h>
-#define GLFW_EXPOSE_NATIVE_GLX
-#define GLFW_EXPOSE_NATIVE_X11
+#    include <dlfcn.h>
+#    define GLFW_EXPOSE_NATIVE_GLX
+#    define GLFW_EXPOSE_NATIVE_X11
 
-#define GLFWAPI __attribute__((visibility("default")))
+#    define GLFWAPI __attribute__((visibility("default")))
 
 #else
-#warning "Unknown platform"
+#    warning "Unknown platform"
 
 #endif
 
@@ -879,6 +879,12 @@ void dont_load_renderdoc() {
     capture_in_progress = false;
 }
 
+#if defined(WIN32) || defined(__linux__)
+#    define RDOC_AVAILABLE 1
+#else
+#    define RDOC_AVAILABLE 0
+#endif
+
 void load_renderdoc(const char *capture_path_template) {
     fs::path rdoc_dll_path(LOGL_RENDERDOC_DLL_PATH);
     auto pathstr = rdoc_dll_path.u8string();
@@ -911,8 +917,12 @@ void load_renderdoc(const char *capture_path_template) {
     }
 
 #else
-#error "Unknown platform"
+#    warning "Unknown platform"
+    LOG_F(WARNING, "Renderdoc not loaded. g_rdoc is nullptr");
+
 #endif
+
+#if RDOC_AVAILABLE
 
     int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, reinterpret_cast<void **>(&g_rdoc));
     if (ret == 0) {
@@ -937,9 +947,15 @@ void load_renderdoc(const char *capture_path_template) {
     capture_in_progress = false;
 
     LOG_F(INFO, "Renderdoc loaded. Capture files are at - %s", g_rdoc->GetCaptureFilePathTemplate());
+
+#endif
 }
 
-void shutdown_renderdoc() { g_rdoc->Shutdown(); }
+void shutdown_renderdoc() {
+#if RDOC_AVAILABLE
+    g_rdoc->Shutdown();
+#endif
+}
 
 void start_renderdoc_frame_capture(GLFWwindow *window) {
     if (!g_rdoc) {
@@ -954,13 +970,15 @@ void start_renderdoc_frame_capture(GLFWwindow *window) {
     auto native_window = glfwGetGLXWindow(window);
 
 #else
-#error "Unknown platform"
+#    warning "Unknown platform"
 #endif
+
+#if RDOC_AVAILABLE
     CHECK_EQ_F(capture_in_progress, false, "Capture already in progress.");
 
     g_rdoc->StartFrameCapture(context, (void *)native_window);
-
     capture_in_progress = true;
+#endif
 }
 
 void end_renderdoc_frame_capture(GLFWwindow *window) {
@@ -977,8 +995,10 @@ void end_renderdoc_frame_capture(GLFWwindow *window) {
     auto native_window = glfwGetGLXWindow(window);
 
 #else
-#error "Unknown platform"
+#    warning "Unknown platform"
 #endif
+
+#if RDOC_AVAILABLE
     CHECK_EQ_F(capture_in_progress, true);
     CHECK_EQ_F(g_rdoc->IsFrameCapturing(), 0u, "Renderdoc not capturing any frame.");
 
@@ -990,16 +1010,20 @@ void end_renderdoc_frame_capture(GLFWwindow *window) {
     }
 
     capture_in_progress = false;
+#endif
 }
 
 bool is_renderdoc_frame_capturing() {
+#if RDOC_AVAILABLE
     if (g_rdoc != nullptr) {
         return g_rdoc->IsFrameCapturing();
     }
     return false;
+#endif
 }
 
 void trigger_renderdoc_frame_capture(u32 num_captures) {
+#if RDOC_AVAILABLE
     if (!g_rdoc) {
         return;
     }
@@ -1009,5 +1033,6 @@ void trigger_renderdoc_frame_capture(u32 num_captures) {
     } else {
         g_rdoc->TriggerMultiFrameCapture(num_captures);
     }
+#endif
 }
 } // namespace eng

@@ -316,17 +316,15 @@ constexpr RasterizerStateDesc default_rasterizer_state_desc = logl_internal::mak
 
 inline void RasterizerStateDesc::set_default() { *this = default_rasterizer_state_desc; }
 
-inline NOT_CONSTEXPR_IN_MSVC bool operator==(const RasterizerStateDesc &rs1, const RasterizerStateDesc &rs2) {
+inline bool operator==(const RasterizerStateDesc &rs1, const RasterizerStateDesc &rs2) {
     return memcmp(&rs1, &rs2, sizeof(RasterizerStateDesc)) == 0;
 }
 
-inline NOT_CONSTEXPR_IN_MSVC bool operator<(const RasterizerStateDesc &rs1, const RasterizerStateDesc &rs2) {
+inline bool operator<(const RasterizerStateDesc &rs1, const RasterizerStateDesc &rs2) {
     return memcmp(&rs1, &rs2, sizeof(RasterizerStateDesc)) < 0;
 }
 
-inline NOT_CONSTEXPR_IN_MSVC bool operator>(const RasterizerStateDesc &rs1, const RasterizerStateDesc &rs2) {
-    return rs2 < rs1;
-}
+inline bool operator>(const RasterizerStateDesc &rs1, const RasterizerStateDesc &rs2) { return rs2 < rs1; }
 
 inline u64 hash(const RasterizerStateDesc &rs) {
     return fo::murmur_hash_64(&rs, sizeof(RasterizerStateDesc), 0xdeadbeefu);

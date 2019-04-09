@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.4)
 
 include(extra_functions)
 
+set(CMAKE_VERBOSE_MAKEFILE ON)
+
 if(gcc_or_clang)
   add_compile_options(-Wall -march=native -fmax-errors=1)
 else()
@@ -122,9 +124,11 @@ if (LOGL_FSANITIZE_MEMORY)
   set(depending_libraries "-lasan;${depending_libraries}")
 endif()
 
-if(gcc_or_clang)
-  list(APPEND depending_libraries -lstdc++fs -pthread)
-endif()
+if (gcc_or_clang AND NOT APPLE)
+    list(APPEND depending_libraries -lstdc++fs -pthread)
+elseif (APPLE)
+    list(APPEND depending_libraries -lc++fs -pthread)
+endif ()
 
 target_link_libraries(learnogl ${depending_libraries})
 

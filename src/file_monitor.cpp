@@ -1,6 +1,22 @@
 #include <learnogl/file_monitor.h>
 #include <scaffold/temp_allocator.h>
 
+struct DummyFileMonitorImpl {
+    DummyFileMonitorImpl() = default;
+
+    DummyFileMonitorImpl(const DummyFileMonitorImpl &) = delete;
+    DummyFileMonitorImpl(DummyFileMonitorImpl &&) = delete;
+
+    // Associates a new listener for the given pathname
+    void add_listener(const char *pathname, eng::FileMonitor::ListenerFn listener_fn) {
+        UNUSED(pathname);
+        UNUSED(listener_fn);
+    }
+
+    // Poll changes on files. Returns the number of calls to listeners
+    u32 poll_changes() {}
+};
+
 #define FOUND_IMPLEMENTATION 0
 
 #if __has_include(<sys/inotify.h>)
@@ -119,7 +135,7 @@ static optional<SymbolInfo> add_watch(FileMonitorImpl &fm, const char *path_cstr
         return nullopt;
     }
 
-    fm._path_info.push_back(SymbolInfo { pathsymbol, wd });
+    fm._path_info.push_back(SymbolInfo{ pathsymbol, wd });
     LOG_F(INFO, "[FileMonitor] Added new file to monitor: %s", path_cstr);
     return fm._path_info.back();
 }
@@ -136,7 +152,7 @@ void FileMonitorImpl::add_listener(const char *pathname, eng::FileMonitor::Liste
     auto present = _path_listeners.find(symbol_info.watch_desc);
 
     if (present == _path_listeners.end()) {
-        present = _path_listeners.insert(std::make_pair(symbol_info.watch_desc, PathAssoc {})).first;
+        present = _path_listeners.insert(std::make_pair(symbol_info.watch_desc, PathAssoc{})).first;
     }
     present->second.push_back(std::move(listener_fn));
 }
@@ -189,7 +205,7 @@ u32 FileMonitorImpl::poll_changes() {
                         ++num_listeners_called;
                         ::invoke(
                             fn,
-                            eng::FileMonitor::ListenerArgs { event_type, symbol_info.pathsymbol, pathname });
+                            eng::FileMonitor::ListenerArgs{ event_type, symbol_info.pathsymbol, pathname });
                     }
                 }
             }
@@ -204,153 +220,32 @@ u32 FileMonitorImpl::poll_changes() {
 // Windows implementation
 
 #if !(FOUND_IMPLEMENTATION)
-#    ifdef WIN32
-#        include <windows.h>
+#    if defined(WIN32)
 #        undef FOUND_IMPLEMENTATION
 #        define FOUND_IMPLEMENTATION 1
 
 namespace eng::logl_internal {
+struct FileMonitorImpl : DummyFileMonitorImpl {};
 
-using NativeString = decltype(fs::path().native());
-
-// Represents a single file being watched
-struct FilePathRepr {
-    // This file's path in generic format
-    eng::StringSymbol pathsymbol;
-
-    // This file's path in native format
-    NativeString pathname_native;
-
-    // All the listners for this file
-    std::vector<FileMonitor::ListenerFn> listeners;
-};
-
-// Per-directory info
-struct DirWatchInfo {
-    HANDLE watch_handle;
-
-    // Generic pathname's symbol
-    eng::StringSymbol dirpath_symbol;
-
-    // All the files in this dir for which we will call listeners
-    std::vector<FilePathRepr> files_in_dir;
-};
-
-struct FileMonitorImpl {
-    std::vector<DirWatchInfo> _dir_watch_infos;
-
-    void add_listener(const char *pathname, FileMonitor::ListenerFn listener_fn);
-    u32 poll_changes();
-};
-
-// Creates a new watch and returns the index of the watch info in the vector
-size_t add_new_dir_watch(FileMonitorImpl &fm, eng::StringSymbol dirpath_symbol, const char *dirpath_cstr) {
-    // dirpath_cstr is in generic format. We translate to native. Simple way to do it is just use fs::path.
-    fs::path dirpath(dirpath_cstr);
-
-    const auto dirpath_str = dirpath.native();
-    auto dirpath_native_cstr = dirpath_str.c_str();
-
-    HANDLE watch_handle =
-        CreateFileW(dirpath_native_cstr,
-                    FILE_LIST_DIRECTORY,
-                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                    nullptr,
-                    OPEN_EXISTING,
-                    FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
-                    NULL);
-
-    if (watch_handle == INVALID_HANDLE_VALUE) {
-        LOG_F(ERROR, "Failed to add watch for directory: %s", dirpath_cstr);
-        return ~size_t(0);
-    }
-
-    fm._dir_watch_infos.push_back(DirWatchInfo { watch_handle, dirpath_symbol, {} });
-
-    LOG_F(INFO, "Added watch on directory: %s", dirpath_cstr);
-
-    return fm._dir_watch_infos.size() - 1;
-}
-
-void FileMonitorImpl::add_listener(const char *pathname, FileMonitor::ListenerFn listener_fn) {
-    // First thing is to take out the directory name
-
-    LOG_F(WARNING, "[FileMonitor] - Not implemented on windows");
-
-#        if 0
-    fs::path dirpath(pathname);
-
-    if (!fs::exists(dirpath)) {
-        LOG_F(ERROR, "[FileMonitor] File %s does not exist", pathname);
-        return;
-    }
-    dirpath.remove_filename();
-    auto dirpathstring = dirpath.generic_u8string();
-
-    // Add the file to the directory being watched
-    auto filepath_symbol = eng::default_string_table().to_symbol(pathname);
-    auto dirpath_symbol = eng::default_string_table().to_symbol(dirpathstring.c_str());
-
-    // Search for the directory if we are already watching it
-    size_t info_index = ~size_t(0);
-    for (size_t i = 0; i < _dir_watch_infos.size(); ++i) {
-        if (_dir_watch_infos[i].dirpath_symbol == dirpath_symbol) {
-            info_index = i;
-            break;
-        }
-    }
-    if (info_index == ~size_t(0)) {
-        info_index = add_new_dir_watch(*this, dirpath_symbol, dirpathstring.c_str());
-        if (info_index == ~size_t(0)) {
-            return;
-        }
-    }
-    auto &watch_info = _dir_watch_infos[info_index];
-
-    LOG_F(INFO, "Adding listener to file: %s", eng::default_string_table().to_string(filepath_symbol));
-
-    // See if this file is already being monitored, if yes then add the listener to it.
-    for (auto &file_repr : watch_info.files_in_dir) {
-        if (file_repr.pathsymbol == filepath_symbol) {
-            file_repr.listeners.push_back(std::move(listener_fn));
-            return;
-        }
-    }
-
-    // Otherwise create a new FilePathRepr
-    watch_info.files_in_dir.push_back(FilePathRepr{filepath_symbol, fs::path(pathname).native(),
-                                                   std::vector<FileMonitor::ListenerFn>{listener_fn}});
-
-#        endif
-}
-
-// void overlapped_completion_routine(DWORD error_code, DWORD bytes_transferred, LPOVERLAPPED p_overlapped) {}
-
-u32 FileMonitorImpl::poll_changes() {
-#        if 0
-    TempAllocator1024 ta(memory_globals::default_allocator());
-    Array<u8> buffer(ta, 1000);
-
-    for (auto &watch_info : _dir_watch_infos) {
-        u8 *p_buffer = data(buffer);
-
-        DWORD bytes_returned;
-        // OVERLAPPED overlapped{};
-
-        // Keep reading pending directory changes
-        while (ReadDirectoryChangesW(watch_info.watch_handle, p_buffer, vec_bytes(buffer), false,
-                                     FILE_NOTIFY_CHANGE_LAST_WRITE, &bytes_returned, nullptr, nullptr)) {
-            LOG_F(INFO, "Changes in directory: %s",
-                  eng::default_string_table().to_string(watch_info.dirpath_symbol));
-        }
-    }
-#        endif
-    return 0;
-}
-
-} // namespace logl_internal
+} // namespace eng::logl_internal
 
 #    endif
+#endif
+
+// MacOS implementation
+#if !(FOUND_IMPLEMENTATION)
+
+#    if defined(__APPLE__)
+
+namespace eng::logl_internal {
+struct FileMonitorImpl : DummyFileMonitorImpl {};
+
+} // namespace eng::logl_internal
+
+#define FOUND_IMPLEMENTATION 1
+
+#    endif
+
 #endif
 
 #if !(FOUND_IMPLEMENTATION)
