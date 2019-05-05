@@ -372,16 +372,6 @@ struct TextureInfo {
 };
 
 static constexpr uint MAX_FRAMEBUFFER_COLOR_TEXTURES = 8;
-static constexpr uint MAX_FRAGMENT_OUTPUTS = 8;
-
-struct FramebufferInfo {
-    std::array<TextureInfo, MAX_FRAMEBUFFER_COLOR_TEXTURES> color_textures;
-    TextureInfo depth_texture;
-    std::array<u8, MAX_FRAGMENT_OUTPUTS> current_draw_buffers;
-
-    u32 width;
-    u32 height;
-};
 
 struct CameraTransformUB {
     fo::Matrix4x4 view;             // View <- World
@@ -504,6 +494,9 @@ using VarShaderHandle = ::VariantTable<VertexShaderHandle,
                                        TessEvalShaderHandle,
                                        ComputeShaderHandle>;
 
+// Max fragment output locations will obviously be <= MAX_FBO_ATTACHMENTS
+constexpr u32 MAX_FRAGMENT_OUTPUTS = MAX_FBO_ATTACHMENTS;
+
 // Some useful per FBO info for our purposes will be to know the data type and dimension of each attachment.
 struct FboPerAttachmentDim {
     struct AttachmentInfo {
@@ -516,7 +509,7 @@ struct FboPerAttachmentDim {
         bool valid() const { return fetch_type != TexelFetchType::INVALID; }
     };
 
-    std::array<AttachmentInfo, MAX_FBO_ATTACHMENTS> color_attachment_dims;
+    std::array<AttachmentInfo, MAX_FRAGMENT_OUTPUTS> color_attachment_dims;
     AttachmentInfo depth_attachment_dim;
 
     bool operator==(const FboPerAttachmentDim &o) const { return memcmp(this, &o, sizeof(*this)) == 0; }
@@ -525,7 +518,7 @@ struct FboPerAttachmentDim {
 struct NewFBO {
     FboPerAttachmentDim _dims;
 
-    std::array<GLResource64, MAX_FBO_ATTACHMENTS> _color_textures = {};
+    std::array<GLResource64, MAX_FRAGMENT_OUTPUTS> _color_textures = {};
     GLResource64 _depth_texture = 0;
     GLResource64 _fbo_id64 = 0;
 
@@ -533,7 +526,15 @@ struct NewFBO {
     fo::Vector4 clear_color = eng::math::zero_4;
     f32 clear_depth = -1.0f;
 
+    // Just an array of GL draw-buffers numbers used by bind_destination_fbo
+    std::array<GLenum, MAX_FRAGMENT_OUTPUTS> _gl_draw_buffers;
+
     u32 num_color_textures() const {
+        if (_fbo_id64 == 0) {
+            // This represents the default framebuffer
+            return 1;
+        }
+
         u32 count = 0;
         for (auto id64 : _color_textures) {
             count += u32(GLResource64_RMID_Mask::extract(id64) != 0);
@@ -632,11 +633,11 @@ struct RenderManager : NonCopyable {
 
     FBO _screen_fbo;
 
-    VertexArrayHandle pos2d_vao_rmid = 0;
-    VertexArrayHandle pos_vao_rmid = 0;
-    VertexArrayHandle pn_vao_rmid = 0;
-    VertexArrayHandle pnu_vao_rmid = 0;
-    VertexArrayHandle pnut_vao_rmid = 0;
+    VertexArrayHandle pos2d_vao = 0;
+    VertexArrayHandle pos_vao = 0;
+    VertexArrayHandle pn_vao = 0;
+    VertexArrayHandle pnu_vao = 0;
+    VertexArrayHandle pnut_vao = 0;
 
     RenderManager(fo::Allocator &backing_allocator = fo::memory_globals::default_allocator());
 };
@@ -662,9 +663,21 @@ struct FboId {
 
 static inline FboId for_default() { return FboId{ 0 }; }
 
+// Create a new fbo with given backing textures
 FboId create_fbo(RenderManager &self,
                  const fo::Array<RMResourceID16> &color_textures,
                  RMResourceID16 depth_texture = 0);
+
+// Bind the given fbo as the destination of fragment outputs. Specify the attachment map such that the
+// fragment shader output to location i goes to the backing texture at attachment_map[i]
+void bind_destination_fbo(RenderManager &rm,
+                          FboId fbo_id,
+                          const ::StaticVector<i32, -1, MAX_FBO_ATTACHMENTS> &attachment_map);
+
+// Bind the given fbo as the source of pixel reads, framebuffer blits, etc. The attachment_number denotes
+// which color attachment will be used as the source in subsequent glReadPixels call. If you are only going to
+// read data from shader, you don't need to specify any attachment number and passing -1 denotes that case.
+void bind_source_fbo(eng::RenderManager &rm, FboId fbo_id, i32 attachment_number = -1);
 
 void init_render_manager(RenderManager &self);
 
@@ -683,36 +696,6 @@ struct DepthStencilStateId {
 struct BlendFunctionDescId {
     u16 _id;
 };
-
-inline RasterizerStateId add_rasterizer_state(RenderManager &rm, const RasterizerStateDesc &rs) {
-    for (u32 i = 0; i < size(rm._cached_rasterizer_states); ++i) {
-        if (rm._cached_rasterizer_states[i] == rs) {
-            return RasterizerStateId{ (u16)i };
-        }
-    }
-    push_back(rm._cached_rasterizer_states, rs);
-    return RasterizerStateId{ (u16)(size(rm._cached_rasterizer_states) - 1) };
-}
-
-inline DepthStencilStateId add_depth_stencil_state(RenderManager &rm, const DepthStencilStateDesc &ds) {
-    for (u32 i = 0; i < size(rm._cached_depth_stencil_states); ++i) {
-        if (memcmp(&ds, &rm._cached_depth_stencil_states[i], sizeof(DepthStencilStateDesc)) == 0) {
-            return DepthStencilStateId{ (u16)i };
-        }
-    }
-    fo::push_back(rm._cached_depth_stencil_states, ds);
-    return DepthStencilStateId{ (u16)(fo::size(rm._cached_depth_stencil_states) - 1) };
-}
-
-inline BlendFunctionDescId add_blend_function_desc(RenderManager &rm, const BlendFunctionDesc &bf) {
-    for (u32 i = 0; i < size(rm._cached_blendfunc_states); ++i) {
-        if (memcmp(&bf, &rm._cached_blendfunc_states[i], sizeof(DepthStencilStateDesc)) == 0) {
-            return BlendFunctionDescId{ (u16)i };
-        }
-    }
-    fo::push_back(rm._cached_blendfunc_states, bf);
-    return BlendFunctionDescId{ (u16)(fo::size(rm._cached_blendfunc_states) - 1) };
-}
 
 // -- Buffer creation functions
 
@@ -818,6 +801,8 @@ set_shaders(RenderManager &rm, const ShadersToUse &shaders_to_use, const char *d
 RMResourceID16
 link_shader_program(RenderManager &rm, const ShadersToUse &shaders_to_use, const char *debug_label = nullptr);
 
+void set_program(RenderManager &self, const ShaderProgramHandle handle);
+
 constexpr u32 enumerated_shader_kind(ShaderKind shader_kind) {
     if (shader_kind == UNSPECIFIED_SHADER_KIND) {
         return 0;
@@ -922,14 +907,6 @@ void copy_buffer_to_buffer(RMResourceID16 source_buffer,
                            RMResourceID16 dest_buffer,
                            const CopyBufferRange &range);
 
-// Set the current shader program. File names are given. Shader type is decided from the extension.
-void set_shader_program(RenderManager &rm, const fo::Vector<fs::path> &shader_files);
-
-// Similar as above, but requires specifying each shader type
-void set_shader_program(RenderManager &rm,
-                        const fo::Vector<fs::path> &shader_files,
-                        const fo::Vector<GLObjectKind> &shader_type);
-
 // Set depth-stencil state
 void set_ds_state(RenderManager &rm, DepthStencilStateId state_id);
 
@@ -937,7 +914,7 @@ void set_ds_state(RenderManager &rm, DepthStencilStateId state_id);
 void set_rs_state(RenderManager &rm, RasterizerStateId state_id);
 
 // Set blend-function state
-// void set_blendfunc_state(RenderManager &rm, BlendFunctionStateId state_id);
+void set_blendfunc_state(RenderManager &rm, i32 output_number, BlendFunctionDescId &state_id);
 
 #if 0
 // Renderable objects representation

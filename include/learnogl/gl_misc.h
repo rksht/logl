@@ -163,6 +163,10 @@ inline StringTable &g_st() { return gl().string_table; }
 
 inline RenderManager &g_rm() { return gl().render_manager; }
 
+inline GLuint gluint_from_globjecthandle(const GLObjectHandle &handle) {
+    return eng::get_gluint_from_rmid(g_rm(), handle.rmid());
+}
+
 inline FixedStringBuffer &g_strings() { return gl().fixed_string_buffer; }
 
 /// Creates a window and initializes a GL context

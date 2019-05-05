@@ -111,6 +111,13 @@ template <typename T> fs::path generic_path(T source) {
     return fs::path(std::move(source));
 }
 
+// Just a pinch of autism
+using Vec4 = fo::Vector4;
+using Vec3 = fo::Vector3;
+using Vec2 = fo::Vector2;
+using Mat3 = fo::Matrix3x3;
+using Mat4 = fo::Matrix4x4;
+
 /* Here's a convention. Always wrap integer sequence enums in a struct like this
 -
 
@@ -824,3 +831,66 @@ DefaultUniquePtr<ObjectType> default_unique(Args &&... ctor_args) {
         fo::make_new<ObjectType>(fo::memory_globals::default_allocator(), std::forward<Args>(ctor_args)...),
         &scratch_allocator_deleter<ObjectType>);
 }
+
+// A static vector with an 'empty' element defined.
+template <typename T, T empty_element, size_t full_capacity>
+struct StaticVector : std::array<T, full_capacity> {
+    using Base = std::array<T, full_capacity>;
+
+    i32 _current_count = 0;
+
+    StaticVector() = default;
+
+    StaticVector(std::initializer_list<T> initial_elements)
+        : Base(initial_elements) {
+        _current_count = initial_elements.size();
+        if (_current_count != (i32)capacity()) {
+            _reset();
+        }
+    }
+
+    size_t filled_size() const { return (size_t)_current_count; }
+    size_t capacity() const { return full_capacity; }
+
+    T &operator[](size_t i) {
+        DCHECK_F(i < _current_count);
+        return Base::operator[](i);
+    }
+
+    const T &operator[](size_t i) const {
+        DCHECK_F(i < _current_count);
+        return Base::operator[](i);
+    }
+
+    T &push_back(T &&item) {
+        DCHECK_F(_current_count != Base::size());
+        Base::operator[](_current_count++) = std::forward<T>(item);
+    }
+
+    T &push_back(const T &item) {
+        DCHECK_F(_current_count != Base::size());
+        Base::operator[](_current_count++) = item;
+    }
+
+    void set_empty() {
+        _current_count = 0;
+        _reset();
+    }
+
+    T &back() { return Base::operator[](_current_count - 1); }
+
+    // Pop-back is nop if current count is 0
+    void pop_back() {
+        if (_current_count > 0) {
+            --_current_count;
+            Base::operator[](_current_count) = empty_element;
+        }
+    }
+
+    void _reset() {
+        for (size_t i = _current_count; i < Base::size(); ++i) {
+            Base::operator[](i) = empty_element;
+        }
+    }
+};
+

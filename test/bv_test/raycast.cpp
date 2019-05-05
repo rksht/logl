@@ -10,6 +10,7 @@ struct ViewProjEtc {
 	fo::Matrix4x4 view_from_clip; // Inverse of perspective projection matrix
 	fo::Matrix4x4 model_to_world; // Keep model to world in this buffer.
 	fo::Vector4 eye_position;
+	fo::Vector2 screen_wh;
 };
 
 static eng::RasterizerStateDesc rast_state_desc = eng::default_rasterizer_state_desc;
@@ -23,7 +24,7 @@ struct App {
 	f32 domain_start = -1.0;
 	f32 domain_end = 1.0;
 	u32 texture_resolution = 64;
-	u32 point_grid_resolution = 128;
+	u32 point_grid_resolution = 64;
 
 	GLuint volume_texture;
 	GLuint volume_sampler;
@@ -62,7 +63,8 @@ void make_3d_texture(App &app)
 				const u32 texel = k * (resolution * resolution) + j * resolution + i;
 
 				// Distance from circle at origin
-				f32 d = magnitude({ x, y, z });
+				// f32 d = magnitude({ x, y, z });
+				f32 d = (f32)rng::random(0.0, 0.5) * magnitude({ x, y, z });
 
 				// Putting that very value into the texel
 				values[texel] = d;
@@ -181,6 +183,8 @@ void make_uniform_buffers(App &app)
 void load_programs(App &app)
 {
 	eng::ShaderDefines shader_defs;
+	shader_defs.add("VOLUME_TEX_RESOLUTION", (int)app.texture_resolution);
+
 	const auto shader_file = make_path(SOURCE_DIR, "raycast.vsfs.glsl");
 
 	GLuint vs = eng::create_vsfs_shader_object(
@@ -227,6 +231,8 @@ namespace app_loop
 		app.view_proj_etc.view_from_world = app.camera.view_xform();
 		app.view_proj_etc.view_from_clip = inverse(app.view_proj_etc.clip_from_view);
 		app.view_proj_etc.eye_position = fo::Vector4(app.camera.position(), 1.0);
+
+		app.view_proj_etc.screen_wh = { f32(glparams.window_width), f32(glparams.window_height) };
 
 		// initialize render states. default suffices.
 		rast_state_desc.cull_side = GL_BACK;
@@ -291,6 +297,7 @@ int main()
 	glparams.window_title = "single pass raycast";
 	glparams.clear_color = colors::PowderBlue;
 	eng::start_gl(glparams);
+	rng::init_rng();
 
 	app_loop::State timer{};
 

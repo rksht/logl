@@ -77,6 +77,11 @@ struct SamplerDesc {
     f32 max_anisotropy;
     f32 min_lod;
     f32 max_lod;
+
+    constexpr SamplerDesc &set_wrap_mode_all(GLenum mode) {
+        addrmode_u = addrmode_u = addrmode_w = mode;
+        return *this;
+    }
 };
 
 // Equals is not strictly needed, but whatever.

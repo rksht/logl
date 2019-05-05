@@ -233,7 +233,7 @@ void init_mesh_buffer(const aiMesh *mesh,
             const aiBone *bone = mesh->mBones[bone_index];
 
             auto name_fstring = g_strings().add(bone->mName.data);
-            DLOG_F(INFO, "Bone number %u is named '%s'", g_strings().get(name_fstring));
+            DLOG_F(INFO, "Bone with index %u is named '%s'", bone_index, g_strings().get(name_fstring));
 
             // Offset transform is simply translation. Take that from the matrix.
             const aiMatrix4x4 assimp_mat = bone->mOffsetMatrix;

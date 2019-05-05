@@ -140,4 +140,3 @@ message("depending_libraries = ${depending_libraries}")
 
 add_library(learnogl_compat ${source_files})
 target_link_libraries(learnogl_compat ${depending_libraries})
-

@@ -753,12 +753,22 @@ void set_rs_state(RenderManager &rm, RasterizerStateId state_id) {
     set_gl_rasterizer_state(desc);
 }
 
-#if 0
-void set_blendfunc_state(RenderManager &rm, BlendFunctionDescId state_id) {
+void set_blendfunc_state(RenderManager &rm, i32 output_number, BlendFunctionDescId &state_id) {
     auto &desc = rm._cached_blendfunc_states[state_id._id];
-    set_gl_blendfunc_state(desc);
+
+    if (desc.blend_op == BlendOp::BLEND_DISABLED) {
+        glDisablei(GL_BLEND, output_number);
+        return;
+    }
+
+    glEnablei(GL_BLEND, output_number);
+    glBlendFuncSeparatei(output_number,
+                         desc.src_rgb_factor,
+                         desc.dst_rgb_factor,
+                         desc.src_alpha_factor,
+                         desc.dst_alpha_factor);
+    glBlendEquationi(output_number, desc.blend_op);
 }
-#endif
 
 namespace internal {
 
@@ -793,6 +803,11 @@ RMResourceID16 set_shaders(RenderManager &self, const ShadersToUse &shaders_to_u
     GLResource64 res64 = internal::link_shader_program(self, shaders_to_use, debug_label);
     glUseProgram(GLResource64_GLuint_Mask::extract(res64));
     return (RMResourceID16)GLResource64_RMID_Mask::extract(res64);
+}
+
+void set_program(RenderManager &self, const ShaderProgramHandle handle) {
+    GLuint gl_handle = get_gluint_from_rmid(self, handle.rmid());
+    glUseProgram(gl_handle);
 }
 
 void bind_to_bindpoint(RenderManager &self, UniformBufferHandle ubo_handle, GLuint bindpoint) {
@@ -886,6 +901,46 @@ FboId create_fbo(RenderManager &self,
     return FboId{ (u16)(fo::size(self._fbos) - 1) };
 }
 
+void bind_destination_fbo(eng::RenderManager &rm,
+                          FboId fbo_id,
+                          const ::StaticVector<i32, -1, MAX_FRAGMENT_OUTPUTS> &attachment_map) {
+    const NewFBO &fbo = rm._fbos[fbo_id._id];
+
+    StaticVector<GLenum, GL_NONE, MAX_FRAGMENT_OUTPUTS> gl_attachment_numbers;
+
+    const u32 num_color_textures = fbo.num_color_textures();
+
+    for (size_t i = 0; i < attachment_map.capacity(); ++i) {
+        const i32 attachment_number = attachment_map[i];
+
+        DCHECK_LT_F(attachment_number,
+                    (i32)num_color_textures,
+                    "No texture backing attachment number %i",
+                    attachment_number);
+
+        const GLenum gl_attachment_number =
+            attachment_number == -1 ? GL_NONE : GL_COLOR_ATTACHMENT0 + (GLenum)attachment_number;
+
+        gl_attachment_numbers.push_back(gl_attachment_number);
+    }
+
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, GLResource64_GLuint_Mask::extract(fbo._fbo_id64));
+    glDrawBuffers(MAX_FRAGMENT_OUTPUTS, gl_attachment_numbers.data());
+}
+
+void bind_source_fbo(eng::RenderManager &rm, FboId fbo_id, i32 attachment_number) {
+    const NewFBO &fbo = rm._fbos[fbo_id._id];
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, GLResource64_GLuint_Mask::extract(fbo._fbo_id64));
+
+    if (attachment_number != -1) {
+        DCHECK_F(attachment_number < fbo.num_color_textures());
+
+        // If this is the default framebuffer, we ignore the attachment number
+        glReadBuffer(fbo_id._id == 0 ? GL_BACK_LEFT : GL_COLOR_ATTACHMENT0 + (GLenum)attachment_number);
+    }
+}
+
 // Impl of miscellaneous pure helper functions
 
 // Initialize a VAO format description from the given mesh data.
@@ -915,22 +970,22 @@ VaoFormatDesc vao_format_from_mesh_data(const mesh::StrippedMeshData &m) {
 
 TU_LOCAL void create_common_vaos(RenderManager &self) {
     // Position 2D
-    self.pos2d_vao_rmid = create_vao(
+    self.pos2d_vao = create_vao(
         self, VaoFormatDesc::from_attribute_formats({ { 2, GL_FLOAT, GL_FALSE, 0, 0 } }), "@vao_pos2d");
 
     // Position 3D
-    self.pos_vao_rmid = create_vao(
+    self.pos_vao = create_vao(
         self, VaoFormatDesc::from_attribute_formats({ { 3, GL_FLOAT, GL_FALSE, 0, 0 } }), "@vao_pos3d");
 
     // Pos, Normal
-    self.pn_vao_rmid = create_vao(
+    self.pn_vao = create_vao(
         self,
         VaoFormatDesc::from_attribute_formats(
             { { 3, GL_FLOAT, GL_FALSE, 0, 0 }, { 3, GL_FLOAT, GL_FALSE, sizeof(fo::Vector3), 0 } }),
         "@vao_pos_normal_3d");
 
     // Pos, Normal, Texcoord2d
-    self.pnu_vao_rmid =
+    self.pnu_vao =
         create_vao(self,
                    VaoFormatDesc::from_attribute_formats(
                        { { 3, GL_FLOAT, GL_FALSE, 0, 0 },
@@ -939,18 +994,17 @@ TU_LOCAL void create_common_vaos(RenderManager &self) {
                    "@vao_pos_normal_uv_3d");
 
     // Pos, Normal, Texcoord2d, Tangent
-    self.pnut_vao_rmid =
-        create_vao(self,
-                   VaoFormatDesc::from_attribute_formats(
-                       { { 3, GL_FLOAT, GL_FALSE, 0, 0 },
-                         { 3, GL_FLOAT, GL_FALSE, sizeof(fo::Vector3), 0 },
-                         { 2, GL_FLOAT, GL_FALSE, sizeof(fo::Vector3) + sizeof(fo::Vector3), 0 },
-                         { 4,
-                           GL_FLOAT,
-                           GL_FALSE,
-                           sizeof(fo::Vector3) + sizeof(fo::Vector3) + sizeof(fo::Vector2),
-                           0 } }),
-                   "@vao_pos_normal_uv_tan_3d");
+    self.pnut_vao = create_vao(self,
+                               VaoFormatDesc::from_attribute_formats(
+                                   { { 3, GL_FLOAT, GL_FALSE, 0, 0 },
+                                     { 3, GL_FLOAT, GL_FALSE, sizeof(fo::Vector3), 0 },
+                                     { 2, GL_FLOAT, GL_FALSE, sizeof(fo::Vector3) + sizeof(fo::Vector3), 0 },
+                                     { 4,
+                                       GL_FLOAT,
+                                       GL_FALSE,
+                                       sizeof(fo::Vector3) + sizeof(fo::Vector3) + sizeof(fo::Vector2),
+                                       0 } }),
+                               "@vao_pos_normal_uv_tan_3d");
 }
 
 } // namespace eng
