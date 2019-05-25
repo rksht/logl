@@ -49,7 +49,8 @@ layout(binding = GAUSSIAN_BLUR_UBO_BINDPOINT, std140) uniform GaussianBlurUB
     float offsets[5];
 };
 
-layout(binding = FP16_COLOR_TEXTURE_BINDPOINT) uniform sampler2D rgba16f_sampler;
+// layout(binding = FP16_COLOR_TEXTURE_BINDPOINT) uniform sampler2D rgba16f_sampler;
+layout(binding = 0) uniform sampler2D rgba16f_sampler;
 
 layout(location = 0) out vec4 o_fs;
 

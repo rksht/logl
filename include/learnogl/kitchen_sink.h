@@ -295,19 +295,52 @@ bool contains(InputIterator begin, InputIterator end, const T &v) {
     return std::any_of(begin, end, [&v](const auto &element) { return element == v; });
 }
 
-template <typename FoundIterator, typename EndIterator> struct FindWithEnd {
+template <typename FoundIterator, typename EndIterator, bool is_map = false> struct FindWithEnd {
     FoundIterator res_it;
     FoundIterator end_it;
 
-    auto &keyvalue() { return *res_it; }
+    auto &keyvalue() const { return *res_it; }
 
-    auto &keyvalue_must(const char *msg = "") {
+    auto &keyvalue_must(const char *msg = "") const {
         CHECK_F(found(), msg);
         return *res_it;
     }
 
     bool not_found() const { return res_it == end_it; }
     bool found() const { return !not_found(); }
+
+    auto &key() const {
+        if constexpr (is_map) {
+            return keyvalue().first;
+        } else {
+            return keyvalue().first();
+        }
+    }
+
+    auto &value() const {
+        if constexpr (is_map) {
+            return keyvalue().second;
+        } else {
+            return keyvalue().second();
+        }
+    }
+
+    template <typename Callable> void if_found(Callable c) const {
+        static_assert(
+            std::is_invocable<Callable, decltype(keyvalue().first()), decltype(keyvalue().second())>::value,
+            "Given callable is incompatible with lookup key and value types");
+
+        if (found()) {
+            std::invoke(c, key(), value());
+        }
+    }
+
+    template <typename Callable> void if_not_found(Callable c) const {
+        static_assert(std::is_invocable<Callable>::value, "Given callable should take no arguments");
+        if (!found()) {
+            std::invoke(c);
+        }
+    }
 
     operator bool() const { return found(); }
 };
@@ -832,50 +865,52 @@ DefaultUniquePtr<ObjectType> default_unique(Args &&... ctor_args) {
         &scratch_allocator_deleter<ObjectType>);
 }
 
-// A static vector with an 'empty' element defined.
-template <typename T, T empty_element, size_t full_capacity>
-struct StaticVector : std::array<T, full_capacity> {
+// Basic static vector
+template <typename T, size_t full_capacity> struct StaticVector : std::array<T, full_capacity> {
     using Base = std::array<T, full_capacity>;
 
-    i32 _current_count = 0;
+    size_t _current_count = 0;
 
     StaticVector() = default;
 
-    StaticVector(std::initializer_list<T> initial_elements)
-        : Base(initial_elements) {
+    StaticVector(std::initializer_list<T> initial_elements) {
         _current_count = initial_elements.size();
-        if (_current_count != (i32)capacity()) {
-            _reset();
-        }
+        CHECK_LE_F(initial_elements.size(), full_capacity);
+        std::copy(STD_BEGIN_END(initial_elements), std::begin(*this));
     }
 
     size_t filled_size() const { return (size_t)_current_count; }
+
+    // Not usually required.
     size_t capacity() const { return full_capacity; }
 
     T &operator[](size_t i) {
-        DCHECK_F(i < _current_count);
+        DCHECK_LT_F(i, _current_count);
         return Base::operator[](i);
     }
+
+    T &unchecked_at(size_t i) { return Base::operator[](i); }
 
     const T &operator[](size_t i) const {
-        DCHECK_F(i < _current_count);
+        DCHECK_LT_F(i, _current_count);
         return Base::operator[](i);
     }
 
+    const T &unchecked_at(size_t i) const { return Base::operator[](i); }
+
     T &push_back(T &&item) {
-        DCHECK_F(_current_count != Base::size());
+        DCHECK_NE_F(_current_count, Base::size());
         Base::operator[](_current_count++) = std::forward<T>(item);
+        return Base::operator[](_current_count - 1);
     }
 
     T &push_back(const T &item) {
-        DCHECK_F(_current_count != Base::size());
+        DCHECK_NE_F(_current_count, Base::size());
         Base::operator[](_current_count++) = item;
+        return Base::operator[](_current_count - 1);
     }
 
-    void set_empty() {
-        _current_count = 0;
-        _reset();
-    }
+    void set_empty() { _current_count = 0; }
 
     T &back() { return Base::operator[](_current_count - 1); }
 
@@ -883,14 +918,14 @@ struct StaticVector : std::array<T, full_capacity> {
     void pop_back() {
         if (_current_count > 0) {
             --_current_count;
-            Base::operator[](_current_count) = empty_element;
         }
     }
 
-    void _reset() {
-        for (size_t i = _current_count; i < Base::size(); ++i) {
-            Base::operator[](i) = empty_element;
-        }
-    }
+    void fill_backing_array(const T &v) { std::fill(Base::begin(), Base::end(), v); }
+
+    auto begin() { return Base::begin(); }
+    auto end() { return Base::begin() + _current_count; }
+
+    auto begin() const { return Base::begin(); }
+    auto end() const { return Base::begin() + _current_count; }
 };
-

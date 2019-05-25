@@ -11,8 +11,8 @@
 #include <learnogl/gl_binding_state.h>
 #include <learnogl/input_handler.h>
 #include <learnogl/mesh.h>
+#include <learnogl/nf_simple.h>
 #include <learnogl/pmr_compatible_allocs.h>
-// #include <learnogl/post_processing.h>
 #include <learnogl/audio.h>
 #include <learnogl/fixed_string_buffer.h>
 #include <learnogl/resource.h>
@@ -124,7 +124,6 @@ struct StartGLParams {
     unsigned int window_height = 768;
     bool enable_debug_output = true;
     DebugCallbackSeverity debug_callback_severity = { true, true, false, false };
-    eng::ShaderGlobalsConfig shader_globals_config = eng::default_shader_globals_config;
     bool abort_on_error = true;
     bool double_buffer_enabled = true;
     bool window_resize_enabled = false;
@@ -147,6 +146,9 @@ struct GLApp {
     RenderManager render_manager;
     FBO default_fbo;
 
+    inistorage::Storage config_ini;
+
+    // For all my fixed string needs
     FixedStringBuffer fixed_string_buffer;
 };
 
@@ -162,6 +164,8 @@ inline SoundManager &g_sound_man() { return gl().sound_man; }
 inline StringTable &g_st() { return gl().string_table; }
 
 inline RenderManager &g_rm() { return gl().render_manager; }
+
+inline inistorage::Storage &g_ini() { return gl().config_ini; }
 
 inline GLuint gluint_from_globjecthandle(const GLObjectHandle &handle) {
     return eng::get_gluint_from_rmid(g_rm(), handle.rmid());

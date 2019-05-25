@@ -10,10 +10,7 @@
 
 #endif
 
-#if defined LOGURU_WITH_STREAMS
-#    undef LOGURU_WITH_STREAMS
-#    define LOGURU_WITH_STREAMS 1
-#endif
+#define LOGURU_WITH_STREAMS 1
 // #define LOGURU_USE_FMTLIB 1
 
 #include <glad/glad.h>

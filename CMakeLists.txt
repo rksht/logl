@@ -113,6 +113,7 @@ set(rel_include_dirs
     "halpern_pmr/include"
     "mapbox"
     "loguru"
+    "cxx-prettyprint"
     # "anttweakbar_msvc_cmake/include"
     # "duktape"
     # "liquidfun/liquidfun/Box2D"
@@ -160,6 +161,9 @@ set(LOGL_UI_FONT "${LOGL_DATA_DIR}/RobotoMono-Bold.ttf"
     CACHE STRING "Path to default font"
     FORCE)
 set(LOGL_RENDERDOC_DLL_PATH "" CACHE PATH "Path to renderdoc .dll or .so")
+
+set(LOGL_APP_CONFIG_PATH "" CACHE PATH "Path to app config in sjson 'key=value' format")
+
 option(LOGL_FSANITIZE_MEMORY "Build with -fsanitize=memory" off)
 
 set(LOGL_MSVC_WARNING_LEVEL "2" CACHE STRING "MSVC warning level")
@@ -181,6 +185,8 @@ disable_unwanted_warnings()
 # cmakelists doing this thing.
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS true)
 add_library(loguru third/loguru/loguru.cpp third/loguru/loguru.hpp)
+
+add_compile_options("-DLOGL_APP_CONFIG_PATH=\"${LOGL_APP_CONFIG_PATH}\"")
 
 add_subdirectory(scripts)
 add_subdirectory(src)

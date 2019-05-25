@@ -81,7 +81,7 @@ namespace inistorage {
 
 using Variant = VariantTable<std::string, double, bool, fo::Vector2, fo::Vector3, fo::Vector4>;
 
-// Often I just use .ini-ish files. So this is for that
+// Often I just use sjson for .ini-ish files. So this is for some convenience while doing that.
 struct Storage {
     std::unordered_map<std::string, Variant> _map;
 
@@ -98,6 +98,8 @@ struct Storage {
 
     nfcd_ConfigData *cd() const { return _cd; }
 
+    bool is_empty() const { return _map.size() == 0; }
+
     template <typename ValueType>::optional<ValueType> _get_maybe(const char *key) {
         auto iter = _map.find(key);
         if (iter == _map.end()) {
@@ -110,7 +112,12 @@ struct Storage {
         return get_value<ValueType>(iter->second);
     }
 
-    bool string(const char *key, std::string &out, ::optional<std::string> default_value) {
+    // All these methods accept the key and a refernce to the output variable where the value will be assigned
+    // to. Also takes an optional default value. If key doesn't exist, and you provide a default value, the
+    // default value will be assigned. In either case the returned boolean indicates whether key existed in
+    // table or not.
+
+    bool string(const char *key, std::string &out, ::optional<std::string> default_value = ::nullopt) {
         auto res = _get_maybe<std::string>(key);
         if (res) {
             out = std::move(res.value());

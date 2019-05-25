@@ -1,4 +1,5 @@
 #include <learnogl/fixed_string_buffer.h>
+#include <learnogl/kitchen_sink.h>
 #include <loguru.hpp>
 #include <scaffold/const_log.h>
 
@@ -9,7 +10,7 @@ FixedStringBuffer::Index FixedStringBuffer::add(const char *s, u32 length) {
 
     u32 bytes_before_adding = fo::size(_concat_of_strings);
 
-    fo::resize(_concat_of_strings, length + 1);
+    fo::resize(_concat_of_strings, bytes_before_adding + length + 1);
 
     memcpy(fo::data(_concat_of_strings) + bytes_before_adding, s, length);
     _concat_of_strings[fo::size(_concat_of_strings) - 1] = char(0);

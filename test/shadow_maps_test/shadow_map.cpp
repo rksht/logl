@@ -75,7 +75,7 @@ void compute_transforms(shadow_map::ShadowMap &m, const shadow_map::InitInfo &in
 
 #if 1
     // Not really needed, but doing it. Rotate the light axes by 180 deg so that y points "above" the world's
-    // z = 0 plane.
+    // z = 0 plane. // <<< Why rotate when you can just negate the z component?
     Plane3 plane(unit_y, 0.0f);
     if (dot(Vector4(plane), y) < 0.0f) {
         auto q = versor_from_axis_angle(z, pi);

@@ -1,9 +1,12 @@
 #include <learnogl/dds_loader.h>
+#include <learnogl/gl_misc.h>
 #include <learnogl/shader.h>
 #include <learnogl/stb_image.h>
 #include <learnogl/typed_gl_resources.h>
 
 #include <scaffold/ordered_map.h>
+
+#include <thread> // call_once
 
 namespace eng {
 
@@ -102,9 +105,9 @@ static RMResourceID16
 create_buffer_common(RenderManager &rm, const BufferCreateInfo &ci, GLObjectKind::E buffer_kind) {
     GLenum gl_target = rm_to_gl_buffer_kind.get(buffer_kind);
 
-    GLuint buffer = 0;
-    glGenBuffers(1, &buffer);
-    glBindBuffer(gl_target, buffer);
+    GLuint gl_handle = 0;
+    glGenBuffers(1, &gl_handle);
+    glBindBuffer(gl_target, gl_handle);
 
     const auto gl_flags = gl_buffer_access(ci.flags);
 
@@ -114,14 +117,16 @@ create_buffer_common(RenderManager &rm, const BufferCreateInfo &ci, GLObjectKind
         glBufferData(gl_target, ci.bytes, ci.init_data, gl_flags);
     }
 
-    LET rmid = new_resource_id(rm);
-    LET id64 = encode_glresource64(rmid, GLObjectKind::VERTEX_BUFFER, buffer);
+    const auto rmid = new_resource_id(rm);
+    const auto id64 = encode_glresource64(rmid, buffer_kind, gl_handle);
 
-    LET table = rm._kind_to_buffer[(u32)buffer_kind];
+    const auto table_p = rm._kind_to_buffer[(u32)buffer_kind];
     fo::set(rm._rmid16_to_res64, rmid, id64);
-    fo::set(*table, rmid, BufferInfo{ buffer, ci.bytes });
 
+    fo::set(*table_p, rmid, BufferInfo{ gl_handle, ci.bytes });
     fo::set(rm._buffer_sizes, rmid, ci.bytes);
+
+    eng::set_buffer_label(gl_handle, ci.name);
 
     return rmid;
 }
@@ -161,11 +166,13 @@ void source_to_uniform_buffer(RenderManager &self, UniformBufferHandle ubo, Sour
     }
 
     if (source_info.discard) {
-        glInvalidateBufferSubData(GL_UNIFORM_BUFFER, source_info.byte_offset, source_info.num_bytes);
+        glInvalidateBufferSubData(buffer_info.handle, source_info.byte_offset, source_info.num_bytes);
     }
     glBufferSubData(
         GL_UNIFORM_BUFFER, source_info.byte_offset, source_info.num_bytes, source_info.source_bytes);
 }
+
+const char *ShaderInfo::pathname() const { return eng::g_strings().get(this->path_str_index); }
 
 VertexArrayHandle create_vao(RenderManager &self, const VaoFormatDesc &ci, const char *debug_label) {
     for (auto &vao : self._vaos_generated) {
@@ -184,7 +191,7 @@ VertexArrayHandle create_vao(RenderManager &self, const VaoFormatDesc &ci, const
 }
 
 // TODO: Cache. Already in gl_binding_state.cpp. Do that here.
-SamplerObjectHandle create_sampler_object(RenderManager &self, SamplerDesc desc) {
+SamplerObjectHandle create_sampler_object(RenderManager &self, const SamplerDesc &desc) {
     GLuint gl_handle;
     glGenSamplers(1, &gl_handle);
 
@@ -275,7 +282,7 @@ BlendFunctionDescId create_blendfunc_state(RenderManager &self, const BlendFunct
 }
 
 constexpr u32 num_texel_type_configs =
-    TexelOrigType::numbits * TexelComponents::numbits * TexelInterpretType::numbits;
+    TexelBaseType::numbits * TexelComponents::numbits * TexelInterpretType::numbits;
 
 // clang-format off
 
@@ -283,41 +290,41 @@ constexpr auto make_texel_info_to_ext_format() {
     CexprSparseArray<GLExternalFormat, num_texel_type_configs> types;
 
     // Unnormalized fetches
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RED, GL_FLOAT });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT, TexelComponents::RG, TexelInterpretType::UNNORMALIZED),{ GL_RG, GL_FLOAT });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB, GL_FLOAT });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED),{ GL_RGBA, GL_FLOAT });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::FLOAT, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RED, GL_FLOAT });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::FLOAT, TexelComponents::RG, TexelInterpretType::UNNORMALIZED),{ GL_RG, GL_FLOAT });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::FLOAT, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB, GL_FLOAT });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::FLOAT, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED),{ GL_RGBA, GL_FLOAT });
 
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RED, GL_HALF_FLOAT });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RG, GL_HALF_FLOAT });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RGB, GL_HALF_FLOAT });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RGBA, GL_HALF_FLOAT });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RED, GL_HALF_FLOAT });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RG, GL_HALF_FLOAT });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RGB, GL_HALF_FLOAT });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RGBA, GL_HALF_FLOAT });
 
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RED_INTEGER, GL_UNSIGNED_BYTE });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::RG, TexelInterpretType::UNNORMALIZED), { GL_RG_INTEGER, GL_UNSIGNED_BYTE });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB_INTEGER, GL_UNSIGNED_BYTE });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED), { GL_RGBA_INTEGER, GL_UNSIGNED_BYTE });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RED_INTEGER, GL_UNSIGNED_SHORT});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::RG, TexelInterpretType::UNNORMALIZED), { GL_RG_INTEGER, GL_UNSIGNED_SHORT});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB_INTEGER, GL_UNSIGNED_SHORT});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED), { GL_RGBA_INTEGER, GL_UNSIGNED_SHORT});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RED_INTEGER, GL_UNSIGNED_INT});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::RG, TexelInterpretType::UNNORMALIZED), { GL_RG_INTEGER, GL_UNSIGNED_INT});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB_INTEGER, GL_UNSIGNED_INT});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED), { GL_RGBA_INTEGER, GL_UNSIGNED_INT});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U8, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RED_INTEGER, GL_UNSIGNED_BYTE });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U8, TexelComponents::RG, TexelInterpretType::UNNORMALIZED), { GL_RG_INTEGER, GL_UNSIGNED_BYTE });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U8, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB_INTEGER, GL_UNSIGNED_BYTE });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U8, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED), { GL_RGBA_INTEGER, GL_UNSIGNED_BYTE });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RED_INTEGER, GL_UNSIGNED_SHORT});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U16, TexelComponents::RG, TexelInterpretType::UNNORMALIZED), { GL_RG_INTEGER, GL_UNSIGNED_SHORT});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U16, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB_INTEGER, GL_UNSIGNED_SHORT});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U16, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED), { GL_RGBA_INTEGER, GL_UNSIGNED_SHORT});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U32, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RED_INTEGER, GL_UNSIGNED_INT});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U32, TexelComponents::RG, TexelInterpretType::UNNORMALIZED), { GL_RG_INTEGER, GL_UNSIGNED_INT});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U32, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB_INTEGER, GL_UNSIGNED_INT});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U32, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED), { GL_RGBA_INTEGER, GL_UNSIGNED_INT});
     // Normalized fetches
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::R, TexelInterpretType::NORMALIZED), { GL_RED, GL_UNSIGNED_BYTE });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::RG, TexelInterpretType::NORMALIZED), { GL_RG, GL_UNSIGNED_BYTE });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::RGB, TexelInterpretType::NORMALIZED), { GL_RGB, GL_UNSIGNED_BYTE });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::RGBA, TexelInterpretType::NORMALIZED), {GL_RGBA, GL_UNSIGNED_BYTE });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::R, TexelInterpretType::NORMALIZED), { GL_RED, GL_UNSIGNED_SHORT});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::RG, TexelInterpretType::NORMALIZED), { GL_RG, GL_UNSIGNED_SHORT});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::RGB, TexelInterpretType::NORMALIZED), { GL_RGB, GL_UNSIGNED_SHORT});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::RGBA, TexelInterpretType::NORMALIZED), { GL_RGBA, GL_UNSIGNED_SHORT});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::R, TexelInterpretType::NORMALIZED), { GL_RED, GL_UNSIGNED_INT});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::RG, TexelInterpretType::NORMALIZED), { GL_RG, GL_UNSIGNED_INT});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::RGB, TexelInterpretType::NORMALIZED), { GL_RGB, GL_UNSIGNED_INT});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::RGBA, TexelInterpretType::NORMALIZED), { GL_RGBA, GL_UNSIGNED_INT});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U8, TexelComponents::R, TexelInterpretType::NORMALIZED), { GL_RED, GL_UNSIGNED_BYTE });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U8, TexelComponents::RG, TexelInterpretType::NORMALIZED), { GL_RG, GL_UNSIGNED_BYTE });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U8, TexelComponents::RGB, TexelInterpretType::NORMALIZED), { GL_RGB, GL_UNSIGNED_BYTE });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U8, TexelComponents::RGBA, TexelInterpretType::NORMALIZED), {GL_RGBA, GL_UNSIGNED_BYTE });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U16, TexelComponents::R, TexelInterpretType::NORMALIZED), { GL_RED, GL_UNSIGNED_SHORT});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U16, TexelComponents::RG, TexelInterpretType::NORMALIZED), { GL_RG, GL_UNSIGNED_SHORT});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U16, TexelComponents::RGB, TexelInterpretType::NORMALIZED), { GL_RGB, GL_UNSIGNED_SHORT});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U16, TexelComponents::RGBA, TexelInterpretType::NORMALIZED), { GL_RGBA, GL_UNSIGNED_SHORT});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U32, TexelComponents::R, TexelInterpretType::NORMALIZED), { GL_RED, GL_UNSIGNED_INT});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U32, TexelComponents::RG, TexelInterpretType::NORMALIZED), { GL_RG, GL_UNSIGNED_INT});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U32, TexelComponents::RGB, TexelInterpretType::NORMALIZED), { GL_RGB, GL_UNSIGNED_INT});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U32, TexelComponents::RGBA, TexelInterpretType::NORMALIZED), { GL_RGBA, GL_UNSIGNED_INT});
 
     // Note that depth textures usually are never provided by the application but received as a result of a
     // rendering. As such it doesn't make sense to generate an external format for it.
@@ -331,49 +338,51 @@ constexpr auto make_texel_info_to_int_format() {
     CexprSparseArray<GLInternalFormat, num_texel_type_configs> types;
 
     // Unnormalized fetches
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT, TexelComponents::R, TexelInterpretType::UNNORMALIZED), {GL_R32F});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT, TexelComponents::RG, TexelInterpretType::UNNORMALIZED),{ GL_RG32F});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB32F });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED),{ GL_RGBA32F });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::FLOAT, TexelComponents::R, TexelInterpretType::UNNORMALIZED), {GL_R32F});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::FLOAT, TexelComponents::RG, TexelInterpretType::UNNORMALIZED),{ GL_RG32F});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::FLOAT, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB32F });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::FLOAT, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED),{ GL_RGBA32F });
 
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_R16F});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RG16F });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RGB16F });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RGB32F });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_R16F});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RG16F });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RGB16F });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::FLOAT16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_RGB32F });
 
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_R8UI});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::RG, TexelInterpretType::UNNORMALIZED), { GL_RG8UI });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB8UI  });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED), { GL_RGBA8UI });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U8, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_R8UI});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U8, TexelComponents::RG, TexelInterpretType::UNNORMALIZED), { GL_RG8UI });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U8, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB8UI  });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U8, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED), { GL_RGBA8UI });
 
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_R16UI});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::RG, TexelInterpretType::UNNORMALIZED), { GL_RG16UI });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB16UI });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED), { GL_RGBA16UI });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U16, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_R16UI});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U16, TexelComponents::RG, TexelInterpretType::UNNORMALIZED), { GL_RG16UI });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U16, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB16UI });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U16, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED), { GL_RGBA16UI });
 
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_R32UI });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::RG, TexelInterpretType::UNNORMALIZED), { GL_RG32UI});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB32UI});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED), { GL_RGBA32UI });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U32, TexelComponents::R, TexelInterpretType::UNNORMALIZED), { GL_R32UI });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U32, TexelComponents::RG, TexelInterpretType::UNNORMALIZED), { GL_RG32UI});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U32, TexelComponents::RGB, TexelInterpretType::UNNORMALIZED), { GL_RGB32UI});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U32, TexelComponents::RGBA, TexelInterpretType::UNNORMALIZED), { GL_RGBA32UI });
+
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::FLOAT, TexelComponents::DEPTH, TexelInterpretType::UNNORMALIZED), { GL_DEPTH_COMPONENT32F });
 
     // Normalized fetches
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::R, TexelInterpretType::NORMALIZED), { GL_R8 });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::RG, TexelInterpretType::NORMALIZED), { GL_RG8 });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::RGB, TexelInterpretType::NORMALIZED), { GL_RGB8 });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U8, TexelComponents::RGBA, TexelInterpretType::NORMALIZED), {GL_RGBA8 });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U8, TexelComponents::R, TexelInterpretType::NORMALIZED), { GL_R8 });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U8, TexelComponents::RG, TexelInterpretType::NORMALIZED), { GL_RG8 });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U8, TexelComponents::RGB, TexelInterpretType::NORMALIZED), { GL_RGB8 });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U8, TexelComponents::RGBA, TexelInterpretType::NORMALIZED), {GL_RGBA8 });
 
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::R, TexelInterpretType::NORMALIZED), { GL_R16});
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::RG, TexelInterpretType::NORMALIZED), { GL_RG16 });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::RGB, TexelInterpretType::NORMALIZED), { GL_RGB16 });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U16, TexelComponents::RGBA, TexelInterpretType::NORMALIZED), { GL_RGBA16 });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U16, TexelComponents::R, TexelInterpretType::NORMALIZED), { GL_R16});
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U16, TexelComponents::RG, TexelInterpretType::NORMALIZED), { GL_RG16 });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U16, TexelComponents::RGB, TexelInterpretType::NORMALIZED), { GL_RGB16 });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U16, TexelComponents::RGBA, TexelInterpretType::NORMALIZED), { GL_RGBA16 });
 
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::R, TexelInterpretType::NORMALIZED), { GL_R32UI });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::RG, TexelInterpretType::NORMALIZED), { GL_RG32UI });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::RGB, TexelInterpretType::NORMALIZED), { GL_RGB32UI });
-    types.set(_ENCODE_TEXEL_INFO(TexelOrigType::U32, TexelComponents::RGBA, TexelInterpretType::NORMALIZED), { GL_RGBA32UI });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U32, TexelComponents::R, TexelInterpretType::NORMALIZED), { GL_R32UI });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U32, TexelComponents::RG, TexelInterpretType::NORMALIZED), { GL_RG32UI });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U32, TexelComponents::RGB, TexelInterpretType::NORMALIZED), { GL_RGB32UI });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U32, TexelComponents::RGBA, TexelInterpretType::NORMALIZED), { GL_RGBA32UI });
 
-    // Note that depth textures usually are never provided by the application but received as a result of a
-    // rendering. As such it doesn't make sense to generate an external format for it.
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U32, TexelComponents::DEPTH24_STENCIL8, TexelInterpretType::NORMALIZED), { GL_DEPTH24_STENCIL8 });
+    types.set(_ENCODE_TEXEL_INFO(TexelBaseType::U16, TexelComponents::DEPTH, TexelInterpretType::NORMALIZED), { GL_DEPTH_COMPONENT16 });
 
     return types;
 }
@@ -382,25 +391,55 @@ constexpr CexprSparseArray<GLInternalFormat, num_texel_type_configs> texel_info_
 
 // clang-format on
 
-constexpr bool fetch_and_client_compatible(TexelOrigType::E client_type,
-                                           TexelComponents::E client_components,
-                                           TexelInterpretType::E interpret_type,
-                                           TexelFetchType::E fetch_type) {
+constexpr bool sampler_type_and_client_type_ok(TexelBaseType::E client_type,
+                                               TexelComponents::E client_components,
+                                               TexelInterpretType::E interpret_type,
+                                               TexelSamplerType::E sampler_type) {
     bool ok = true;
 
     ok = ok &&
-         (IMPLIES(interpret_type == TexelInterpretType::NORMALIZED, fetch_type == TexelFetchType::FLOAT));
+         (IMPLIES(interpret_type == TexelInterpretType::NORMALIZED, sampler_type == TexelSamplerType::FLOAT));
 
     ok = ok && IMPLIES((interpret_type == TexelInterpretType::UNNORMALIZED &&
-                        TexelOrigType::is_integer(client_type)),
-                       fetch_type != TexelFetchType::FLOAT);
+                        TexelBaseType::is_integer(client_type)),
+                       sampler_type != TexelSamplerType::FLOAT);
 
     return ok;
 }
 
-Texture2DHandle create_texture_2d(RenderManager &self, const TextureCreateInfo &texture_ci) {
-    u8 *source = nullptr;
+Texture2DHandle create_texture_2d(RenderManager &self, TextureCreateInfo texture_ci) {
+    std::once_flag once_flag;
 
+    std::call_once(once_flag, []() {
+        for (size_t i = 0; i < texel_info_to_gl_external_format.HASH_SLOTS; ++i) {
+            const auto &ext_format = texel_info_to_gl_external_format.items[i];
+
+            if (ext_format.index == 0u) {
+                continue;
+            }
+
+            printf("Encoded texel info = %u, External format (components, type) = %u, %u\n",
+                   ext_format.index,
+                   ext_format.value.components,
+                   ext_format.value.component_type);
+        }
+
+        printf("-------------------------------\n");
+    });
+
+    LOG_F(INFO,
+          "texture_ci.width,height,depth = %u, %u, %u",
+          texture_ci.width,
+          texture_ci.height,
+          texture_ci.depth);
+
+    LOG_IF_F(WARNING,
+             texture_ci.depth != 1,
+             "Called %s but given texture_ci.depth == (%u) != 1. Ignoring the value.",
+             __PRETTY_FUNCTION__,
+             texture_ci.depth);
+
+    u8 *source = nullptr;
     GLuint gl_handle = 0;
 
     glGenTextures(1, &gl_handle);
@@ -411,6 +450,13 @@ Texture2DHandle create_texture_2d(RenderManager &self, const TextureCreateInfo &
     const auto encoded_texel_info =
         _ENCODE_TEXEL_INFO(texel_info.internal_type, texel_info.components, texel_info.interpret_type);
 
+    LOG_F(INFO,
+          "internal_type = %u, components = %u, interpret_type = %u, encoded = %u",
+          texel_info.internal_type,
+          texel_info.components,
+          texel_info.interpret_type,
+          encoded_texel_info);
+
     GLInternalFormat internal_format = texel_info_to_gl_internal_format.get_maybe_nil(encoded_texel_info);
     if (internal_format.e == 0) {
         ABORT_F("Not a valid texel info");
@@ -419,9 +465,11 @@ Texture2DHandle create_texture_2d(RenderManager &self, const TextureCreateInfo &
 
     GLExternalFormat external_format = texel_info_to_gl_external_format.get_maybe_nil(encoded_texel_info);
 
-    if (external_format.components == 0 && external_format.component_type == 0) {
-        ABORT_F("Not a valid texel info - no corresponding external format");
-    }
+    LOG_F(INFO,
+          "external format - components = %u, type = %u, encoded_texel_info = %u",
+          external_format.components,
+          external_format.component_type,
+          encoded_texel_info);
 
     if (texture_ci.source.contains_subtype<u8 *>()) {
         source = texture_ci.source.get_value<u8 *>();
@@ -434,6 +482,8 @@ Texture2DHandle create_texture_2d(RenderManager &self, const TextureCreateInfo &
         }
 
         if (source != nullptr) {
+            CHECK_F(!external_format.invalid(),
+                    "Not a valid texel info - no corresponding external format - required for TexSubImage2D");
             glTexSubImage2D(GL_TEXTURE_2D,
                             0,
                             0,
@@ -446,6 +496,13 @@ Texture2DHandle create_texture_2d(RenderManager &self, const TextureCreateInfo &
         }
 
     } else if (texture_ci.source.contains_subtype<fs::path>()) {
+        LOG_F(INFO,
+              "external format - components = %u, type = %u",
+              external_format.components,
+              external_format.component_type);
+
+        CHECK_F(!external_format.invalid(), "Not a valid texel info - no corresponding external format");
+
         const fs::path &file_path = texture_ci.source.get_value<fs::path>();
         const auto str_file = file_path.u8string();
 
@@ -453,7 +510,7 @@ Texture2DHandle create_texture_2d(RenderManager &self, const TextureCreateInfo &
             ABORT_F("Failed to load image - file does not exist - '%s'", str_file.c_str());
         }
 
-        if (file_path.extension() == "png") {
+        if (file_path.extension() == ".png") {
             int w = 0, h = 0, channels_in_file = 0;
             int expected_channels = num_channels_for_components(texel_info.components);
 
@@ -470,6 +527,23 @@ Texture2DHandle create_texture_2d(RenderManager &self, const TextureCreateInfo &
                 ABORT_F("Failed to load png - '%s' for some reason idk", str_file.c_str());
             }
 
+            texture_ci.width = (u16)w;
+            texture_ci.height = (u16)h;
+            texture_ci.depth = 1;
+            texture_ci.mips = 1;
+
+            const auto internal_format =
+                channels_in_file == 1
+                    ? GL_R8
+                    : channels_in_file == 2 ? GL_RG8 : channels_in_file == 3 ? GL_RGB8 : GL_RGBA8;
+
+            glTexStorage2D(GL_TEXTURE_2D, 1, internal_format, (GLuint)w, (GLuint)h);
+
+            LOG_F(INFO,
+                  "External format - components = %u, component_type = %u",
+                  external_format.components,
+                  external_format.component_type);
+
             // Load
             //
             glTexSubImage2D(GL_TEXTURE_2D,
@@ -484,14 +558,45 @@ Texture2DHandle create_texture_2d(RenderManager &self, const TextureCreateInfo &
 
         } else if (file_path.extension() == "dds") {
             dds::load_texture(file_path, gl_handle, nullptr, &fo::memory_globals::default_allocator());
+            ABORT_F("Unimplemented. Should fill up texture_ci here");
         } else {
-            ABORT_F("Unrecognized texture file extension");
+            ABORT_F("Unrecognized texture file extension - %s", file_path.extension().u8string().c_str());
         }
+    } else {
+        LOG_F(INFO, "Created empty texture"); // TODO: Remove this.
     }
 
     RMResourceID16 rmid16 = new_resource_id(self);
 
-    // Store texture info and return the resource-id
+    LOG_F(INFO, "Created texture with rmid = %u", rmid16);
+
+    TextureInfo info;
+    info.rmid = rmid16;
+    info.texture_kind = GLObjectKind::TEXTURE_2D;
+    info.width = texture_ci.width;
+    info.height = texture_ci.height;
+    info.depth = 1;
+    info.mips = texture_ci.mips;
+
+    info.internal_type = texel_info.internal_type;
+
+    info.sampler_type = texel_info.interpret_type == TexelInterpretType::NORMALIZED
+                            ? TexelSamplerType::FLOAT
+                            : TexelBaseType::is_float(texel_info.internal_type)
+                                  ? TexelSamplerType::FLOAT
+                                  : TexelBaseType::is_signed(texel_info.internal_type)
+                                        ? TexelSamplerType::SIGNED_INT
+                                        : TexelBaseType::is_unsigned(texel_info.internal_type)
+                                              ? TexelSamplerType::UNSIGNED_INT
+                                              : TexelSamplerType::INVALID;
+
+    self.texture_infos[rmid16] = info;
+
+    LOG_F(INFO, "gl_handle = %u", gl_handle);
+    self._rmid16_to_res64[rmid16] = encode_glresource64(rmid16, GLObjectKind::TEXTURE_2D, gl_handle);
+    CHECK_EQ_F((GLuint)GLResource64_GLuint_Mask::extract(self._rmid16_to_res64[rmid16]), gl_handle);
+
+    return Texture2DHandle{ rmid16 };
 }
 
 void init_render_manager(RenderManager &self) {
@@ -528,7 +633,6 @@ VarShaderHandle create_shader_object(RenderManager &self,
     ::eng::ShaderSourceType shader_source = shader_source_file;
 
     RMResourceID16 rmid = 0;
-
     if (it == fo::end(self._path_to_shader_rmid)) {
         shader_info.handle =
             ::eng::create_shader_object(shader_source, (ShaderKind)shader_kind, macro_defs, debug_label);
@@ -690,7 +794,7 @@ ComputeShaderHandle create_compute_shader(RenderManager &self,
 
 static GLResource64 link_new_program(RenderManager &self,
                                      const ShadersToUse &shaders_to_use,
-                                     _ShaderStageKey key,
+                                     ShaderProgramKey key,
                                      const char *debug_label) {
     GLuint h = glCreateProgram();
 
@@ -743,6 +847,47 @@ static GLResource64 link_new_program(RenderManager &self,
     return res64;
 }
 
+const ShadersToUse get_shaders_used_by_program(const RenderManager &self,
+                                               const ShaderProgramHandle &program) {
+
+    ShadersToUse use;
+    for (const auto &entry : self._linked_shaders) {
+        if ((u16)GLResource64_RMID_Mask::extract(entry.second()) == program.rmid()) {
+            const auto key = entry.first();
+            use.vs = (key.k0 & 0xffff0000u) >> 16;
+            use.fs = (key.k0 & 0x0000ffffu);
+            use.tc = (key.k1 & 0xffff0000u) >> 16;
+            use.te = (key.k1 & 0x0000ffffu);
+            use.gs = (key.k2 & 0xffff0000u) >> 16;
+            use.cs = (key.k2 & 0x0000ffffu);
+        }
+    }
+    return use;
+}
+
+fo_ss::Buffer ShadersToUse::source_paths_as_string(const RenderManager &rm) const {
+    using namespace fo_ss;
+
+    static_assert(sizeof(ShadersToUse) == sizeof(u16) * 6, "Need this for the following");
+    const auto rmid_array = reinterpret_cast<const u16 *>(this);
+
+    Buffer ss;
+
+    const char *types[] = { "vs", "tc", "te", "gs", "fs", "cs" };
+
+    for (u32 i = 0; i < 6; ++i) {
+        if (rmid_array[i] == 0) {
+            continue;
+        }
+
+        find_with_end(rm._shaders, rmid_array[i]).if_found([&](const auto _, const ShaderInfo &info) {
+            ss << types[i] << ": " << rm._shader_paths.get(info.path_str_index) << "\n";
+        });
+    }
+
+    return ss;
+}
+
 void set_ds_state(RenderManager &rm, DepthStencilStateId state_id) {
     auto &desc = rm._cached_depth_stencil_states[state_id._id];
     set_gl_depth_stencil_state(desc);
@@ -777,7 +922,7 @@ TU_LOCAL GLResource64 link_shader_program(RenderManager &self,
                                           const ShadersToUse &shaders_to_use,
                                           const char *debug_label) {
     // Check if we have the shader program already linked
-    _ShaderStageKey key = shaders_to_use.key();
+    ShaderProgramKey key = shaders_to_use.key();
 
     auto lookup = find_with_end(self._linked_shaders, key);
 
@@ -785,6 +930,7 @@ TU_LOCAL GLResource64 link_shader_program(RenderManager &self,
 
     if (lookup.not_found()) {
         res64 = link_new_program(self, shaders_to_use, key, debug_label);
+        self._rmid16_to_res64[(u16)GLResource64_RMID_Mask::extract((res64))] = res64;
     } else {
         res64 = lookup.keyvalue().second();
     }
@@ -825,12 +971,21 @@ void bind_to_bindpoint(RenderManager &self, UniformBufferHandle ubo_handle, GLui
     glBindBufferRange(GL_UNIFORM_BUFFER, bindpoint, h, 0, size);
 }
 
+FboId create_default_fbo(RenderManager &self, const fo::Array<AttachmentAndClearValue> &clear_attachments) {
+    NewFBO &fbo = self._fbos[0];
+    for (auto &a : clear_attachments) {
+        fbo.clear_attachment_after_bind(a.attachment, a.clear_value);
+    }
+    return FboId{ 0 };
+}
+
 FboId create_fbo(RenderManager &self,
                  const fo::Array<RMResourceID16> &color_textures,
                  RMResourceID16 depth_texture,
+                 const fo::Array<AttachmentAndClearValue> &clear_attachments,
                  const char *debug_label) {
     FBO fbo_with_glhandle;
-    fbo_with_glhandle.gen(debug_label);
+    fbo_with_glhandle.gen(debug_label).bind_as_writable();
 
     NewFBO new_fbo;
 
@@ -855,12 +1010,13 @@ FboId create_fbo(RenderManager &self,
 
         new_fbo._color_textures[i] = res64;
 
-        auto &texture_info = find_with_end(self.texture_info, rmid16).keyvalue_must().second();
+        auto &texture_info = find_with_end(self.texture_infos, rmid16).keyvalue_must().second();
         fo::push_back(texture_infos, &texture_info);
     }
 
     if (depth_texture != 0) {
         auto lookup = find_with_end(self._rmid16_to_res64, depth_texture);
+
         CHECK_F(
             lookup.found(), "Did not find any gl depth texture created with rmid = %u", u32(depth_texture));
 
@@ -870,7 +1026,7 @@ FboId create_fbo(RenderManager &self,
 
         new_fbo._depth_texture = res64;
 
-        auto &texture_info = find_with_end(self.texture_info, depth_texture).keyvalue_must().second();
+        auto &texture_info = find_with_end(self.texture_infos, depth_texture).keyvalue_must().second();
         fo::push_back(texture_infos, &texture_info);
     }
 
@@ -892,31 +1048,38 @@ FboId create_fbo(RenderManager &self,
 
         attachment_info.width = texture_info->width;
         attachment_info.height = texture_info->height;
-        attachment_info.fetch_type = texture_info->fetch_type;
-        attachment_info.client_type = texture_info->client_type;
+        attachment_info.sampler_type = texture_info->sampler_type;
+        attachment_info.internal_type = texture_info->internal_type;
     }
 
     fo::push_back(self._fbos, new_fbo);
+
+    for (const auto &a : clear_attachments) {
+        new_fbo.clear_attachment_after_bind(a.attachment, a.clear_value);
+    }
 
     return FboId{ (u16)(fo::size(self._fbos) - 1) };
 }
 
 void bind_destination_fbo(eng::RenderManager &rm,
                           FboId fbo_id,
-                          const ::StaticVector<i32, -1, MAX_FRAGMENT_OUTPUTS> &attachment_map) {
+                          const ::StaticVector<i32, MAX_FRAGMENT_OUTPUTS> &attachment_map) {
     const NewFBO &fbo = rm._fbos[fbo_id._id];
 
-    StaticVector<GLenum, GL_NONE, MAX_FRAGMENT_OUTPUTS> gl_attachment_numbers;
+    StaticVector<GLenum, MAX_FRAGMENT_OUTPUTS> gl_attachment_numbers;
+    gl_attachment_numbers.fill_backing_array(GL_NONE);
 
     const u32 num_color_textures = fbo.num_color_textures();
 
-    for (size_t i = 0; i < attachment_map.capacity(); ++i) {
-        const i32 attachment_number = attachment_map[i];
+    for (size_t i = 0; i < attachment_map.filled_size(); ++i) {
+        const i32 attachment_number = attachment_map.unchecked_at(i);
 
-        DCHECK_LT_F(attachment_number,
-                    (i32)num_color_textures,
-                    "No texture backing attachment number %i",
-                    attachment_number);
+        if (attachment_number != -1) {
+            DCHECK_LT_F(attachment_number,
+                        (i32)num_color_textures,
+                        "No texture backing attachment number %i",
+                        attachment_number);
+        }
 
         const GLenum gl_attachment_number =
             attachment_number == -1 ? GL_NONE : GL_COLOR_ATTACHMENT0 + (GLenum)attachment_number;
@@ -926,6 +1089,16 @@ void bind_destination_fbo(eng::RenderManager &rm,
 
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, GLResource64_GLuint_Mask::extract(fbo._fbo_id64));
     glDrawBuffers(MAX_FRAGMENT_OUTPUTS, gl_attachment_numbers.data());
+
+    // TODO: Check if this attachment is actually bound as a draw buffer. Otherwise this can fail. Not too
+    // important though.
+
+    for (u32 i = 0; i < fbo._attachments_to_clear.filled_size(); ++i) {
+        const auto &a = fbo._attachments_to_clear[i];
+        glClearBufferfv(a.attachment == -1 ? GL_DEPTH : GL_COLOR,
+                        a.attachment == -1 ? 0 : a.attachment,
+                        reinterpret_cast<const GLfloat *>(&a.clear_value));
+    }
 }
 
 void bind_source_fbo(eng::RenderManager &rm, FboId fbo_id, i32 attachment_number) {
@@ -934,11 +1107,16 @@ void bind_source_fbo(eng::RenderManager &rm, FboId fbo_id, i32 attachment_number
     glBindFramebuffer(GL_READ_FRAMEBUFFER, GLResource64_GLuint_Mask::extract(fbo._fbo_id64));
 
     if (attachment_number != -1) {
-        DCHECK_F(attachment_number < fbo.num_color_textures());
+        DCHECK_F(attachment_number < (i32)fbo.num_color_textures());
 
         // If this is the default framebuffer, we ignore the attachment number
         glReadBuffer(fbo_id._id == 0 ? GL_BACK_LEFT : GL_COLOR_ATTACHMENT0 + (GLenum)attachment_number);
     }
+}
+
+NewFBO &NewFBO::clear_attachment_after_bind(i32 attachment_number, const fo::Vector4 &color_value) {
+    _attachments_to_clear.push_back({ attachment_number, color_value });
+    return *this;
 }
 
 // Impl of miscellaneous pure helper functions

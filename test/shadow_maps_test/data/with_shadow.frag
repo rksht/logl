@@ -2,29 +2,23 @@
 
 // Shader takes the albedo from a uniform block, not a texture.
 
-/* __macro__
+#include "common_defs.inc.glsl"
 
-DEPTH_TEXTURE_UNIT = int
-DIR_LIGHTS_LIST_UBLOCK_BINDING = int
-NUM_DIR_LIGHTS = int
-PER_OBJECT_UBLOCK_BINDING = int
-CAMERA_ETC_UBLOCK_BINDING = int
-
-*/
-
-in VsOut {
+in VsOut
+{
     vec3 pos_w;
     vec3 normal_w;
     vec3 tangent_w;
     vec2 st;
-} fs_in;
+}
+fs_in;
 
 vec4 get_diffuse_color() { return vec4(0.95, 0.20, 0.50, 1.0); }
 
 // The shadow transform takes a position in world space to clip space from the point of view of casting light.
 uniform mat4 shadow_xform;
 
-layout(binding = DEPTH_TEXTURE_UNIT) uniform sampler2DShadow comparing_sampler;
+layout(binding = 1) uniform sampler2DShadow comparing_sampler;
 
 struct CookTorranceMaterial {
     vec4 cdiff;
@@ -44,38 +38,35 @@ struct DirLight {
     vec3 specular;
 };
 
-layout(binding = DIR_LIGHTS_LIST_UBLOCK_BINDING, std140) uniform DirLightsList {
-    DirLight dir_lights[NUM_DIR_LIGHTS];
-};
-
-layout(binding = PER_OBJECT_UBLOCK_BINDING, std140) uniform ublock_PerObject {
+layout(binding = 1, std140) uniform ublock_PerObject
+{
     mat4 world_from_local_xform;
     mat4 inv_world_from_local_xform;
     Material object_material;
 };
 
-layout(binding = CAMERA_ETC_UBLOCK_BINDING, std140) uniform ublock_EyeBlock {
-    mat4 view_from_world_xform;
-    mat4 clip_from_view_xform;
-    vec3 eye_pos;
-    float frame_interval;
-};
+layout(binding = 2, std140) uniform DirLightsList { DirLight dir_lights[NUM_DIR_LIGHTS]; };
+
+DEFINE_CAMERA_UBLOCK(0, ublock_EyeBlock);
 
 out vec4 fc;
 
-float calc_attenuation(float d, float falloff_start, float falloff_end) {
+float calc_attenuation(float d, float falloff_start, float falloff_end)
+{
     float ratio = (falloff_end - d) / (falloff_end - falloff_start);
     return clamp(ratio, 0.0, 1.0);
 }
 
-vec3 schlick_fresnel(vec3 R0, vec3 normal, vec3 light_vec) {
+vec3 schlick_fresnel(vec3 R0, vec3 normal, vec3 light_vec)
+{
     float cos_incident_angle = clamp(dot(normal, light_vec), 0.0, 1.0);
     float f0 = 1.0 - cos_incident_angle;
     vec3 reflection_fraction = R0 + (1.0 - R0) * (f0 * f0 * f0 * f0 * f0);
     return reflection_fraction;
 }
 
-vec3 blinn_phong_shade(vec3 light_strength, vec3 light_vec, vec3 normal, vec3 to_eye, Material mat) {
+vec3 blinn_phong_shade(vec3 light_strength, vec3 light_vec, vec3 normal, vec3 to_eye, Material mat)
+{
     const float m = mat.shininess * 256.0;
     vec3 half_vec = normalize(to_eye + light_vec);
 
@@ -92,7 +83,8 @@ vec3 blinn_phong_shade(vec3 light_strength, vec3 light_vec, vec3 normal, vec3 to
     return (mat.diffuse_albedo.rgb + spec_albedo) * light_strength;
 }
 
-vec3 calc_dir_light_contrib(DirLight L, Material mat, vec3 normal, vec3 to_eye) {
+vec3 calc_dir_light_contrib(DirLight L, Material mat, vec3 normal, vec3 to_eye)
+{
     // The light vector aims opposite the dir the light rays travel.
     vec3 lightVec = -L.direction;
 
@@ -107,19 +99,13 @@ vec3 calc_dir_light_contrib(DirLight L, Material mat, vec3 normal, vec3 to_eye) 
 #define DEPTH_TEXTURE_SIZE 1
 #endif
 
-float calc_lit_factor() {
-    const mat4 to_range_01 = mat4(
-        vec4(0.5,   0,      0,      0),
-        vec4(0,     0.5,    0,      0),
-        vec4(0,     0,      0.5,    0),
-        vec4(0.5,   0.5,    0.5,    1.0)
-    );
+float calc_lit_factor()
+{
+    const mat4 to_range_01 =
+      mat4(vec4(0.5, 0, 0, 0), vec4(0, 0.5, 0, 0), vec4(0, 0, 0.5, 0), vec4(0.5, 0.5, 0.5, 1.0));
     const float dx = 1.0 / float(DEPTH_TEXTURE_SIZE);
-    const vec2 offsets[9] = {
-        vec2(-dx, dx), vec2(0.0, dx), vec2(dx, dx),
-        vec2(-dx, 0.0), vec2(0.0f, 0.0), vec2(dx, 0.0),
-        vec2(-dx, -dx), vec2(0.0f, -dx), vec2(dx, -dx)
-    };
+    const vec2 offsets[9] = { vec2(-dx, dx), vec2(0.0, dx),  vec2(dx, dx),    vec2(-dx, 0.0), vec2(0.0f, 0.0),
+                              vec2(dx, 0.0), vec2(-dx, -dx), vec2(0.0f, -dx), vec2(dx, -dx) };
 
     // We have w = 1, so there is no effect. Can use `textureProj` I think
     const vec4 pos_wrt_clip = shadow_xform * vec4(fs_in.pos_w, 1.0);
@@ -147,7 +133,8 @@ float calc_lit_factor() {
     return lit_factor;
 }
 
-void main() {
+void main()
+{
     vec4 diffuse_color = get_diffuse_color();
 
     // fc = diffuse_color;
@@ -161,15 +148,16 @@ void main() {
 
     for (int i = 0; i < NUM_DIR_LIGHTS; ++i)
         lit_factor[i] = 1.0;
-    }
+}
 
-    // Only the first light casts shadow. Calculate the lit factor.
-    lit_factor[0] = calc_lit_factor();
+// Only the first light casts shadow. Calculate the lit factor.
+lit_factor[0] = calc_lit_factor();
 
-    for (int i = 0; i < NUM_DIR_LIGHTS; ++i) {
-        DirLight l = dir_lights[i];
-        frag_color += calc_dir_light_contrib(l, mat, normal_w, normalize(eye_pos - fs_in.pos_w)) * lit_factor[i];
-    }
+for (int i = 0; i < NUM_DIR_LIGHTS; ++i) {
+    DirLight l = dir_lights[i];
+    frag_color +=
+      calc_dir_light_contrib(l, mat, normal_w, normalize(u_camPosition - fs_in.pos_w)) * lit_factor[i];
+}
 
-    fc = vec4(frag_color, diffuse_color.a);
+fc = vec4(frag_color, diffuse_color.a);
 }

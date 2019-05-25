@@ -1,10 +1,6 @@
 #version 430 core
 
-#ifndef DEPTH_TEXTURE_UNIT
-#define DEPTH_TEXTURE_UNIT 0
-#endif
-
-layout(binding = DEPTH_TEXTURE_UNIT) uniform sampler2D depth_sampler;
+layout(binding = 0) uniform sampler2D depth_sampler;
 
 in VsOut {
 	vec3 pos_w;

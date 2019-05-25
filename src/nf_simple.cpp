@@ -156,7 +156,9 @@ static void fill_storage_from_subobject(
     }
 }
 
-Storage::Storage(const fs::path &path, bool keep_config_data) { SELF.init_from_file(path, keep_config_data); }
+Storage::Storage(const fs::path &path, bool keep_config_data) {
+    this->init_from_file(path, keep_config_data);
+}
 
 void Storage::init_from_file(const fs::path &path, bool keep_config_data) {
     if (_initialized) {

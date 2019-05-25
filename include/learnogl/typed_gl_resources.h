@@ -124,6 +124,12 @@ REALLY_INLINE GLObjectKind::E resource_kind_from_id16(RMResourceID16 resource) {
 struct BufferInfo {
     GLuint handle;
     u32 bytes;
+
+    BufferInfo() = default;
+
+    BufferInfo(GLuint gl_handle, u32 bytes)
+        : handle(gl_handle)
+        , bytes(bytes) {}
 };
 
 struct Texture2DInfo {
@@ -163,6 +169,8 @@ struct BindpointStates {
 struct ShaderInfo {
     GLuint handle;
     FixedStringBuffer::Index path_str_index;
+
+    const char *pathname() const;
 };
 
 struct ShaderResourceInfo {
@@ -238,8 +246,8 @@ struct IndexBufferInfo {
     BufferCreateFlags create_flags;
 };
 
-// How a texel is going to be read from the shader.
-ENUMSTRUCT TexelFetchType {
+// How a texel is going to be read from the shader when accessed using a sampler.
+ENUMSTRUCT TexelSamplerType {
     enum E : u32 { INVALID = 0, FLOAT, UNSIGNED_INT, SIGNED_INT, COUNT };
 
     DECL_BITS_CHECK(u32);
@@ -247,8 +255,8 @@ ENUMSTRUCT TexelFetchType {
 
 // What the components are in the client texture (format needed to be known before allocating storage or after
 // packing them to the client side). There are way too many formats. I'm representing only the common ones I
-// can foresee being used.
-ENUMSTRUCT TexelOrigType {
+// can foresee being used by me.
+ENUMSTRUCT TexelBaseType {
     enum E : u32 { INVALID = 0, FLOAT, FLOAT16, U8, U16, U32, S8, S16, S32, DEPTH32, COUNT };
 
     static constexpr bool is_signed(E e) { return S8 <= e && e <= S32; }
@@ -262,11 +270,12 @@ ENUMSTRUCT TexelOrigType {
 };
 
 ENUMSTRUCT TexelComponents {
-    enum E : u32 { INVALID = 0, R, RG, RGB, RGBA, DEPTH, COUNT };
+    enum E : u32 { INVALID = 0, R, RG, RGB, RGBA, DEPTH, DEPTH32F_STENCIL8, DEPTH24_STENCIL8, COUNT };
+    // ^ Depth components are only valid if you're specifying an internal format
 
     DECL_BITS_CHECK(u32);
 
-    ENUM_MASK32(TexelOrigType::end_bit);
+    ENUM_MASK32(TexelBaseType::end_bit);
 };
 
 ENUMSTRUCT TexelInterpretType {
@@ -281,7 +290,7 @@ ENUMSTRUCT TexelInterpretType {
 /// and NORMALIZED will yield floats in shader. `components` is a semantic that denotes usual components like
 /// R, G, B, A, or DEPTH.
 struct TexelInfo {
-    TexelOrigType::E internal_type;
+    TexelBaseType::E internal_type;
     TexelComponents::E components;
     TexelInterpretType::E interpret_type;
 };
@@ -304,27 +313,33 @@ constexpr int num_channels_for_components(TexelComponents::E components) {
 /// TexelInfo packed into a u32
 using TexelInfo32 = u32;
 
-inline constexpr TexelInfo32 _ENCODE_TEXEL_INFO(TexelOrigType::E client_type,
+inline constexpr TexelInfo32 _ENCODE_TEXEL_INFO(TexelBaseType::E client_type,
                                                 TexelComponents::E components,
                                                 TexelInterpretType::E interpret_type) {
-    TexelInfo32 bits = TexelOrigType::mask::shift(client_type) | TexelComponents::mask::shift(components) |
+    TexelInfo32 bits = TexelBaseType::mask::shift(client_type) | TexelComponents::mask::shift(components) |
                        TexelInterpretType::mask::shift(interpret_type);
     return bits;
 }
 
 inline constexpr TexelInfo _DECODE_TEXEL_INFO(TexelInfo32 bits) {
     TexelInfo info = {};
-    info.internal_type = (TexelOrigType::E)TexelOrigType::mask::extract(bits);
+    info.internal_type = (TexelBaseType::E)TexelBaseType::mask::extract(bits);
     info.components = (TexelComponents::E)TexelComponents::mask::extract(bits);
     info.interpret_type = (TexelInterpretType::E)TexelInterpretType::mask::extract(bits);
     return info;
 }
 
 struct GLExternalFormat {
-    GLenum component_type;
-    GLenum components;
+    GLenum components;     // 'format' argument to TexSubImage
+    GLenum component_type; // 'type' argument to TexSubImage
 
-    constexpr bool invalid() { return component_type != GL_NONE && components != GL_NONE; }
+    GLExternalFormat() = default;
+
+    constexpr GLExternalFormat(GLenum components, GLenum component_type)
+        : components(components)
+        , component_type(component_type) {}
+
+    constexpr bool invalid() const { return component_type == GL_NONE || components == GL_NONE; }
 };
 
 struct GLInternalFormat {
@@ -343,7 +358,7 @@ struct TextureCreateInfo {
     TexelInfo texel_info = {};
 
     // If given storage_texture is valid, creates a texture view with the storage_texture as the backing
-    // texture.
+    // texture. (TODO)
     RMResourceID16 storage_texture = 0;
 
     // Source can be `nullptr`, and in that case only storage will be allocated. path is here for loading
@@ -353,22 +368,20 @@ struct TextureCreateInfo {
 
 struct TextureInfo {
     RMResourceID16 rmid = 0;
-
     GLObjectKind::E texture_kind;
 
     u16 width = 0;
     u16 height = 0;
     u16 depth = 0;
     u16 layers = 0; // If this is an array texture, layers >= 1.
+    u8 mips = 0;
 
-    TexelFetchType::E fetch_type;
-    TexelOrigType::E client_type;
+    TexelSamplerType::E sampler_type;
+    TexelBaseType::E internal_type;
 
     // If this texture is actually a 'view texture', the original texture ('storage' texture) is pointed
-    // to by this id.
+    // to by this id. (TODO)
     RMResourceID16 storage_texture = 0;
-
-    TextureInfo() = default;
 };
 
 static constexpr uint MAX_FRAMEBUFFER_COLOR_TEXTURES = 8;
@@ -390,11 +403,11 @@ uniform {} {{
 }}
 )";
 
-struct _ShaderStageKey {
+struct ShaderProgramKey {
     uint32_t k0, k1, k2;
 
-    bool operator==(const _ShaderStageKey &o) const { return k0 == o.k0 && k1 == o.k1 && k2 == o.k2; }
-    uint64_t hash() const noexcept { return k0 + uint64_t(~uint32_t(0)) - (k1 ^ k2); }
+    bool operator==(const ShaderProgramKey &o) const { return k0 == o.k0 && k1 == o.k1 && k2 == o.k2; }
+    uint64_t hash() const noexcept { return k0 + uint64_t(~uint32_t(0)) - (k1 ^ k2); };
 };
 
 static constexpr u32 CAMERA_TRANSFORM_UBLOCK_SIZE = sizeof(CameraTransformUB);
@@ -497,16 +510,17 @@ using VarShaderHandle = ::VariantTable<VertexShaderHandle,
 // Max fragment output locations will obviously be <= MAX_FBO_ATTACHMENTS
 constexpr u32 MAX_FRAGMENT_OUTPUTS = MAX_FBO_ATTACHMENTS;
 
-// Some useful per FBO info for our purposes will be to know the data type and dimension of each attachment.
+// Some useful per FBO info for our purposes will be to know the data type and dimension of each
+// attachment.
 struct FboPerAttachmentDim {
     struct AttachmentInfo {
         u16 width = 0;
         u16 height = 0;
-        TexelFetchType::E fetch_type = TexelFetchType::INVALID;
-        TexelOrigType::E client_type = TexelOrigType::INVALID;
+        TexelSamplerType::E sampler_type = TexelSamplerType::INVALID;
+        TexelBaseType::E internal_type = TexelBaseType::INVALID;
 
         // Is valid if a texture is backing this attachment
-        bool valid() const { return fetch_type != TexelFetchType::INVALID; }
+        bool valid() const { return sampler_type != TexelSamplerType::INVALID; }
     };
 
     std::array<AttachmentInfo, MAX_FRAGMENT_OUTPUTS> color_attachment_dims;
@@ -514,6 +528,10 @@ struct FboPerAttachmentDim {
 
     bool operator==(const FboPerAttachmentDim &o) const { return memcmp(this, &o, sizeof(*this)) == 0; }
 };
+
+// Denotes an attachment and the value it will be cleared with when bound as a destination fbo. attachment
+// == -1 represents the depth attachment.
+DEFINE_TRIVIAL_PAIR(AttachmentAndClearValue, i32, attachment, fo::Vector4, clear_value);
 
 struct NewFBO {
     FboPerAttachmentDim _dims;
@@ -526,8 +544,16 @@ struct NewFBO {
     fo::Vector4 clear_color = eng::math::zero_4;
     f32 clear_depth = -1.0f;
 
+    StaticVector<AttachmentAndClearValue, MAX_FRAGMENT_OUTPUTS + 1> _attachments_to_clear = {};
+
     // Just an array of GL draw-buffers numbers used by bind_destination_fbo
     std::array<GLenum, MAX_FRAGMENT_OUTPUTS> _gl_draw_buffers;
+
+    static constexpr i32 CLEAR_DEPTH = -1;
+
+    // Set given `attachment` to be cleared after being bound as a destination fbo. If attachment is -1,
+    // it denotes the depth attachment. Otherwise, it should be positive and denote a color attachment.
+    NewFBO &clear_attachment_after_bind(i32 attachment, const fo::Vector4 &value = eng::math::zero_4);
 
     u32 num_color_textures() const {
         if (_fbo_id64 == 0) {
@@ -543,8 +569,6 @@ struct NewFBO {
     }
 
     bool has_depth_texture() const { return GLResource64_RMID_Mask::extract(_depth_texture) != 0; }
-
-    static NewFBO default_fbo();
 };
 
 struct RenderManager : NonCopyable {
@@ -580,7 +604,7 @@ struct RenderManager : NonCopyable {
 
     fo::PodHash<RMResourceID16, u32> _buffer_sizes = fo::make_pod_hash<RMResourceID16, u32>(_allocator);
 
-    fo::PodHash<RMResourceID16, TextureInfo> texture_info =
+    fo::PodHash<RMResourceID16, TextureInfo> texture_infos =
         fo::make_pod_hash<RMResourceID16, TextureInfo>(_allocator);
 
     // Map from rmid to shader objects
@@ -600,9 +624,9 @@ struct RenderManager : NonCopyable {
     fo::Vector<FBO> _fbos_with_glhandle{ _allocator };
 
     // Storing linked shaders as a GLResource64. Can get the rmid if we want. User-side doesn't need it.
-    fo::PodHash<_ShaderStageKey, GLResource64, decltype(&_ShaderStageKey::hash)> _linked_shaders =
-        fo::make_pod_hash<_ShaderStageKey, GLResource64>(fo::memory_globals::default_allocator(),
-                                                         &_ShaderStageKey::hash);
+    fo::PodHash<ShaderProgramKey, GLResource64, decltype(&ShaderProgramKey::hash)> _linked_shaders =
+        fo::make_pod_hash<ShaderProgramKey, GLResource64>(fo::memory_globals::default_allocator(),
+                                                          &ShaderProgramKey::hash);
 
     fo::PodHash<RMResourceID16, ShaderResourceInfo> shader_resources =
         fo::make_pod_hash<RMResourceID16, ShaderResourceInfo>(_allocator);
@@ -658,25 +682,28 @@ struct GL_ShaderResourceBinding {
 struct FboId {
     u16 _id;
 
-    static inline FboId for_default_fbo();
+    static inline FboId for_default_fbo() { return FboId{ 0 }; }
 };
-
-static inline FboId for_default() { return FboId{ 0 }; }
 
 // Create a new fbo with given backing textures
 FboId create_fbo(RenderManager &self,
                  const fo::Array<RMResourceID16> &color_textures,
-                 RMResourceID16 depth_texture = 0);
+                 RMResourceID16 depth_texture,
+                 const fo::Array<AttachmentAndClearValue> &clear_attachments,
+                 const char *debug_label = nullptr);
+
+FboId create_default_fbo(RenderManager &self, const fo::Array<AttachmentAndClearValue> &clear_attachments);
 
 // Bind the given fbo as the destination of fragment outputs. Specify the attachment map such that the
 // fragment shader output to location i goes to the backing texture at attachment_map[i]
 void bind_destination_fbo(RenderManager &rm,
                           FboId fbo_id,
-                          const ::StaticVector<i32, -1, MAX_FBO_ATTACHMENTS> &attachment_map);
+                          const ::StaticVector<i32, MAX_FBO_ATTACHMENTS> &attachment_map);
 
 // Bind the given fbo as the source of pixel reads, framebuffer blits, etc. The attachment_number denotes
-// which color attachment will be used as the source in subsequent glReadPixels call. If you are only going to
-// read data from shader, you don't need to specify any attachment number and passing -1 denotes that case.
+// which color attachment will be used as the source in subsequent glReadPixels call. If you are only
+// going to read data from shader, you don't need to specify any attachment number and passing -1 denotes
+// that case.
 void bind_source_fbo(eng::RenderManager &rm, FboId fbo_id, i32 attachment_number = -1);
 
 void init_render_manager(RenderManager &self);
@@ -708,7 +735,7 @@ PixelUnpackBufferHandle create_pixel_unpack_buffer(RenderManager &self, const Bu
 
 // -- Texture creation function
 
-Texture2DHandle create_texture_2d(RenderManager &self, const TextureCreateInfo &texture_ci);
+Texture2DHandle create_texture_2d(RenderManager &self, TextureCreateInfo texture_ci);
 
 struct ShaderDefines; // Fwd
 
@@ -775,11 +802,15 @@ struct ShadersToUse {
     RMResourceID16 fs = 0;
     RMResourceID16 cs = 0;
 
+    ShadersToUse() = default;
+
     // Call this if you want to re-use this struct for specifying another set of shaders.
     void reset() { *this = {}; }
 
+    bool is_empty() const { return vs == tc && tc == te && te == gs && gs == fs && fs == cs && cs == 0; }
+
     // Not important for user side. Converts to a key suitable for the hash-map
-    _ShaderStageKey key() const {
+    ShaderProgramKey key() const {
         return { (uint32_t(vs) << 16) | uint32_t(fs),
                  (uint32_t(tc) << 16) | uint32_t(te),
                  (uint32_t(gs) << 16) | uint32_t(cs) };
@@ -791,7 +822,12 @@ struct ShadersToUse {
         use.fs = fs;
         return use;
     }
+
+    // Returns a string containing the paths of the shaders this program was linked from.
+    fo_ss::Buffer source_paths_as_string(const RenderManager &rm) const;
 };
+
+const ShadersToUse get_shaders_used_by_program(const RenderManager &self, const ShaderProgramHandle &program);
 
 // Set the shaders to the pipeline
 RMResourceID16

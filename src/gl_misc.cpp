@@ -242,10 +242,13 @@ void enable_debug_output(DebugCallbackFn debug_callback,
 }
 
 // Fwd
-void init_shape_mesh_struct(ShapeMeshes &shape_meshes);
+TU_LOCAL void init_shape_mesh_struct(ShapeMeshes &shape_meshes);
 
 // Fwd
-void dont_load_renderdoc();
+TU_LOCAL void dont_load_renderdoc();
+
+// Fwd
+TU_LOCAL void load_app_config();
 
 void start_gl(const StartGLParams &params, GLApp &gl_app) {
     CHECK_EQ_F(&gl_app, &gl());
@@ -300,12 +303,6 @@ void start_gl(const StartGLParams &params, GLApp &gl_app) {
     // Store the capabilities info
     init_caps();
 
-    if (params.load_renderdoc) {
-        load_renderdoc(params.rdoc_capture_template);
-    } else {
-        dont_load_renderdoc();
-    }
-
     if (params.enable_debug_output) {
         enable_debug_output(nullptr, nullptr, params.abort_on_error, params.debug_callback_severity);
     }
@@ -315,6 +312,14 @@ void start_gl(const StartGLParams &params, GLApp &gl_app) {
 
     gl_app.window = window;
 
+    load_app_config();
+
+    if (params.load_renderdoc) {
+        load_renderdoc(params.rdoc_capture_template);
+    } else {
+        dont_load_renderdoc();
+    }
+
     init_sound_manager(gl_app.sound_man, gl_app.window);
 
     // Init GL binding state manager
@@ -323,9 +328,20 @@ void start_gl(const StartGLParams &params, GLApp &gl_app) {
     // Init the shape meshes
     init_shape_mesh_struct(gl_app.shape_meshes);
 
-    // Initialize shader globals.
-    init_shader_globals(params.shader_globals_config);
-    add_shader_search_path(LOGL_SHADERS_DIR);
+    {
+        eng::ShaderGlobalsConfig shaders_config;
+
+        if (!gl().config_ini.is_empty()) {
+            INI_STORE_DEFAULT("print_preprocessed_shader",
+                              gl().config_ini.boolean,
+                              shaders_config.print_after_preprocessing,
+                              false);
+        }
+
+        // Initialize shader globals.
+        init_shader_globals(shaders_config);
+        add_shader_search_path(LOGL_SHADERS_DIR);
+    }
 
     gl_app.default_fbo.init_from_default_framebuffer();
 
@@ -864,6 +880,20 @@ void init_shape_mesh_struct(ShapeMeshes &shape_meshes) {
     shape_meshes.pos2d_vao = g_bs().pos2d_vao;
 }
 
+// Loads the app config it it points to a non-empty path
+TU_LOCAL void load_app_config() {
+#if !defined(LOGL_APP_CONFIG_PATH)
+    return;
+#endif
+
+    const auto path = fs::path(LOGL_APP_CONFIG_PATH);
+    const auto path_u8string = path.u8string();
+
+    CHECK_F(fs::exists(path), "App config file - %s - doesn't exist", path_u8string.c_str());
+
+    gl().config_ini.init_from_file(path);
+}
+
 } // namespace eng
 
 namespace eng {
@@ -886,7 +916,15 @@ void dont_load_renderdoc() {
 #endif
 
 void load_renderdoc(const char *capture_path_template) {
-    fs::path rdoc_dll_path(LOGL_RENDERDOC_DLL_PATH);
+    fs::path rdoc_dll_path;
+
+    // Prefer the logl_config.ini variable
+    {
+        std::string rdoc_dll_path_str;
+        INI_STORE_DEFAULT(
+            "renderdoc_dll_path", eng::gl().config_ini.string, rdoc_dll_path_str, LOGL_RENDERDOC_DLL_PATH);
+        rdoc_dll_path = rdoc_dll_path_str;
+    }
     auto pathstr = rdoc_dll_path.u8string();
 
     g_rdoc = nullptr;

@@ -2,72 +2,61 @@
 
 // Shader takes the albedo from a uniform block, not a texture.
 
-/* __macro__
-
-DEPTH_TEXTURE_UNIT = int
-DIR_LIGHTS_LIST_UBLOCK_BINDING = int
-NUM_DIR_LIGHTS = int
-PER_OBJECT_UBLOCK_BINDING = int
-CAMERA_ETC_UBLOCK_BINDING = int
-SHADOW_RELATED_PARAMS_BINDING = int
-
-*/
-
+#include "common_defs.inc.glsl"
 #include "definitions.inc.glsl"
 
-in VsOut {
+in VsOut
+{
     vec3 pos_w;
     vec3 normal_w;
     vec3 tangent_w;
     vec2 st;
-} fs_in;
+}
+fs_in;
 
 struct BoundingSphere {
     vec3 position;
     float radius;
 };
 
+layout(binding = 1) uniform sampler2DShadow comparing_sampler;
+
+DEFINE_CAMERA_UBLOCK(0, ublock_EyeBlock);
+
+layout(binding = 1, std140) uniform ublock_PerObject
+{
+    mat4 world_from_local_xform;
+    mat4 inv_world_from_local_xform;
+    Material object_material; // Only using the material field
+};
+
+layout(binding = 2, std140) uniform DirLightsList { DirLight dir_lights[NUM_DIR_LIGHTS]; };
+
 // The shadow transform takes a position in world space to clip space from the point of view of casting light.
-layout(binding = SHADOW_RELATED_PARAMS_BINDING, std140) uniform ShadowRelated {
+layout(binding = 3, std140) uniform ShadowRelated
+{
     mat4 shadow_xform;
     BoundingSphere scene_bs;
 };
 
-layout(binding = DEPTH_TEXTURE_UNIT) uniform sampler2DShadow comparing_sampler;
-
-
-layout(binding = DIR_LIGHTS_LIST_UBLOCK_BINDING, std140) uniform DirLightsList {
-    DirLight dir_lights[NUM_DIR_LIGHTS];
-};
-
-layout(binding = PER_OBJECT_UBLOCK_BINDING, std140) uniform ublock_PerObject {
-    mat4 world_from_local_xform;
-    mat4 inv_world_from_local_xform;
-    Material object_material;
-};
-
-layout(binding = CAMERA_ETC_UBLOCK_BINDING, std140) uniform ublock_EyeBlock {
-    mat4 view_from_world_xform;
-    mat4 clip_from_view_xform;
-    vec3 eye_pos;
-    float frame_interval;
-};
-
 out vec4 fc;
 
-float calc_attenuation(float d, float falloff_start, float falloff_end) {
+float calc_attenuation(float d, float falloff_start, float falloff_end)
+{
     float ratio = (falloff_end - d) / (falloff_end - falloff_start);
     return clamp(ratio, 0.0, 1.0);
 }
 
-vec3 schlick_fresnel(vec3 R0, vec3 normal, vec3 light_vec) {
+vec3 schlick_fresnel(vec3 R0, vec3 normal, vec3 light_vec)
+{
     float cos_incident_angle = clamp(dot(normal, light_vec), 0.0, 1.0);
     float f0 = 1.0 - cos_incident_angle;
     vec3 reflection_fraction = R0 + (1.0 - R0) * (f0 * f0 * f0 * f0 * f0);
     return reflection_fraction;
 }
 
-vec3 filmic_tonemap(vec3 x) {
+vec3 filmic_tonemap(vec3 x)
+{
     float A = 0.15;
     float B = 0.50;
     float C = 0.10;
@@ -78,7 +67,8 @@ vec3 filmic_tonemap(vec3 x) {
     return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
 }
 
-vec3 blinn_phong_shade(vec3 light_strength, vec3 light_vec, vec3 normal, vec3 to_eye, Material mat) {
+vec3 blinn_phong_shade(vec3 light_strength, vec3 light_vec, vec3 normal, vec3 to_eye, Material mat)
+{
     const float m = mat.shininess * 256.0;
     vec3 half_vec = normalize(to_eye + light_vec);
 
@@ -95,7 +85,8 @@ vec3 blinn_phong_shade(vec3 light_strength, vec3 light_vec, vec3 normal, vec3 to
     return final_color;
 }
 
-vec3 calc_dir_light_contrib(DirLight L, Material mat, vec3 normal, vec3 to_eye) {
+vec3 calc_dir_light_contrib(DirLight L, Material mat, vec3 normal, vec3 to_eye)
+{
     // The light vector aims opposite the dir the light rays travel.
     vec3 lightVec = -L.direction;
 
@@ -106,13 +97,10 @@ vec3 calc_dir_light_contrib(DirLight L, Material mat, vec3 normal, vec3 to_eye) 
     return blinn_phong_shade(lightStrength, lightVec, normal, to_eye, mat);
 }
 
-#ifndef DEPTH_TEXTURE_SIZE
-#    define DEPTH_TEXTURE_SIZE 1
-#endif
-
-float calc_lit_factor() {
+float calc_lit_factor()
+{
     const mat4 to_range_01 =
-        mat4(vec4(0.5, 0, 0, 0), vec4(0, 0.5, 0, 0), vec4(0, 0, 0.5, 0), vec4(0.5, 0.5, 0.5, 1.0));
+      mat4(vec4(0.5, 0, 0, 0), vec4(0, 0.5, 0, 0), vec4(0, 0, 0.5, 0), vec4(0.5, 0.5, 0.5, 1.0));
     const float dx = 1.0 / float(DEPTH_TEXTURE_SIZE);
     const vec2 offsets[9] = { vec2(-dx, dx), vec2(0.0, dx),  vec2(dx, dx),    vec2(-dx, 0.0), vec2(0.0f, 0.0),
                               vec2(dx, 0.0), vec2(-dx, -dx), vec2(0.0f, -dx), vec2(dx, -dx) };
@@ -143,12 +131,14 @@ float calc_lit_factor() {
     return lit_factor;
 }
 
-float distance_sq(vec3 a, vec3 b) {
+float distance_sq(vec3 a, vec3 b)
+{
     vec3 d = a - b;
     return dot(d, d);
 }
 
-bool color_if_outside_scene(vec4 diffuse_albedo) {
+bool color_if_outside_scene(vec4 diffuse_albedo)
+{
     if (distance_sq(fs_in.pos_w, scene_bs.position) >= scene_bs.radius * scene_bs.radius) {
         fc = diffuse_albedo;
         return true;
@@ -156,7 +146,8 @@ bool color_if_outside_scene(vec4 diffuse_albedo) {
     return false;
 }
 
-void main() {
+void main()
+{
     Material mat = object_material;
 
 #if 0
@@ -183,8 +174,8 @@ void main() {
 #pragma unroll
     for (int i = 0; i < NUM_DIR_LIGHTS; ++i) {
         DirLight l = dir_lights[i];
-        frag_color +=
-            calc_dir_light_contrib(l, mat, normal_w, normalize(eye_pos - fs_in.pos_w)) * lit_factor[i];
+        frag_color += calc_dir_light_contrib(l, mat, normal_w, normalize(u_camPosition.xyz - fs_in.pos_w)) *
+          lit_factor[i];
     }
 
     frag_color.xyz = filmic_tonemap(frag_color.xyz * 2.0);
