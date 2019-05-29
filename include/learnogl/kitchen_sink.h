@@ -72,10 +72,11 @@ namespace fo_ss = fo::string_stream;
 #define VAR auto
 #define TU_LOCAL static
 #define GLOBAL_LAMBDA []
+#define const_ const auto
+#define var_ auto
 
 #define DONT_KEEP_INLINED inline
 #define FUNC_PTR(function_name) std::add_pointer_t<decltype(function_name)>
-#define CTOR_INIT_LIST :
 #define CTOR_INIT_FIELD(field_name, ...) field_name(__VA_ARGS__)
 #define DEFAULT(v) (v{})
 #define SELF (*this)

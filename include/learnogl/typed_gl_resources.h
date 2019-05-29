@@ -529,9 +529,25 @@ struct FboPerAttachmentDim {
     bool operator==(const FboPerAttachmentDim &o) const { return memcmp(this, &o, sizeof(*this)) == 0; }
 };
 
-// Denotes an attachment and the value it will be cleared with when bound as a destination fbo. attachment
-// == -1 represents the depth attachment.
-DEFINE_TRIVIAL_PAIR(AttachmentAndClearValue, i32, attachment, fo::Vector4, clear_value);
+// Users should create the attachment index from attachment via these functions.
+inline i32 depth_attachment() { return -1; }
+inline i32 color_attachment(i32 color_attachment_number) { return color_attachment_number; }
+
+// Denotes an attachment and the value it will be cleared with when bound as a destination fbo.
+struct AttachmentAndClearValue {
+    i32 attachment;
+    fo::Vector4 clear_value;
+
+    AttachmentAndClearValue() = default;
+
+    AttachmentAndClearValue(i32 attachment, const fo::Vector4 &clear_value)
+        : attachment(attachment)
+        , clear_value(clear_value) {}
+
+    static i32 depth_attachment() { return -1; }
+
+    static i32 color_attachment(i32 color_attachment_number) { return color_attachment_number; }
+};
 
 struct NewFBO {
     FboPerAttachmentDim _dims;
@@ -546,8 +562,11 @@ struct NewFBO {
 
     StaticVector<AttachmentAndClearValue, MAX_FRAGMENT_OUTPUTS + 1> _attachments_to_clear = {};
 
-    // Just an array of GL draw-buffers numbers used by bind_destination_fbo
+    // Just an internal array of GL draw-buffers numbers used by bind_destination_fbo.
     std::array<GLenum, MAX_FRAGMENT_OUTPUTS> _gl_draw_buffers;
+
+    // Internal boolean. True if this denotes default framebuffer.
+    bool _is_default_fbo = false;
 
     static constexpr i32 CLEAR_DEPTH = -1;
 
@@ -682,6 +701,7 @@ struct GL_ShaderResourceBinding {
 struct FboId {
     u16 _id;
 
+    // Always use this to get the default fbo's id. Don't make an FboId{0} yourself.
     static inline FboId for_default_fbo() { return FboId{ 0 }; }
 };
 
@@ -735,7 +755,8 @@ PixelUnpackBufferHandle create_pixel_unpack_buffer(RenderManager &self, const Bu
 
 // -- Texture creation function
 
-Texture2DHandle create_texture_2d(RenderManager &self, TextureCreateInfo texture_ci);
+Texture2DHandle
+create_texture_2d(RenderManager &self, TextureCreateInfo texture_ci, const char *name = nullptr);
 
 struct ShaderDefines; // Fwd
 

@@ -1,52 +1,25 @@
 #version 430 core
 
+#include "definitions.inc.glsl"
+#include "common_defs.inc.glsl"
+
 in VsOut {
     vec3 pos_w;
     vec3 normal_w;
-    vec3 tangent_w;
-    // vec3 bitangent_w;
-    vec2 st;
 } fs_in;
 
-#if defined(FLAT_COLOR)
 vec4 get_diffuse_color() { return vec4(0.95, 0.20, 0.50, 1.0); }
-#else
-#error "Not using diffuse texture for objects"
-#endif
 
-// Diffuse texture for the model
-layout(binding = 0) uniform sampler2D diffuse_sampler;
+DEFINE_CAMERA_UBLOCK(0, ublock_EyeBlock);
 
-struct Material {
-    vec4 diffuse_albedo;
-    vec3 fresnel_R0;
-    float shininess;
-};
-
-struct DirLight {
-    vec3 position;
-    vec3 direction;
-    vec3 ambient;
-    vec3 diffuse;
-    vec3 specular;
-};
-
-layout(binding = DIR_LIGHTS_LIST_UBLOCK_BINDING, std140) uniform DirLightsList {
-    DirLight dir_lights[NUM_DIR_LIGHTS];
-};
-
-layout(binding = PER_OBJECT_UBLOCK_BINDING, std140) uniform ublock_PerObject {
+layout(binding = 1, std140) uniform ublock_PerObject
+{
     mat4 world_from_local_xform;
     mat4 inv_world_from_local_xform;
-    Material object_material;
+    Material object_material; // Only using the material field
 };
 
-layout(binding = CAMERA_ETC_UBLOCK_BINDING, std140) uniform ublock_EyeBlock {
-    mat4 view_from_world_xform;
-    mat4 clip_from_view_xform;
-    vec3 eye_pos;
-    float frame_interval;
-};
+layout(binding = 2, std140) uniform DirLightsList { DirLight dir_lights[NUM_DIR_LIGHTS]; };
 
 float calc_attenuation(float d, float falloff_start, float falloff_end) {
     float ratio = (falloff_end - d) / (falloff_end - falloff_start);
@@ -105,6 +78,7 @@ float stepmix(float edge0, float edge1, float E, float x)
 }
 
 
+#if 0
 vec3 calc_dir_light_contrib(DirLight L, Material mat, vec3 normal, vec3 to_eye) {
     // The light vector aims opposite the dir the light rays travel.
     vec3 lightVec = -L.direction;
@@ -133,15 +107,21 @@ vec3 calc_dir_light_contrib(DirLight L, Material mat, vec3 normal, vec3 to_eye) 
     return blinn_phong_shade(lightStrength, lightVec, normal, to_eye, mat);
 }
 
-// #undef NUM_DIR_LIGHTS
-// #define NUM_DIR_LIGHTS 1
-
-#if defined(RENDER_TO_TEXTURE)
-layout(location = 0) out vec4 fc;
-
-#else
-out vec4 fc;
 #endif
+
+vec3 calc_dir_light_contrib(DirLight L, Material mat, vec3 normal, vec3 to_eye)
+{
+    // The light vector aims opposite the dir the light rays travel.
+    vec3 lightVec = -L.direction;
+
+    // Scale light down by Lambert's cosine law.
+    float ndotl = max(dot(lightVec, normal), 0.0f);
+    vec3 lightStrength = L.diffuse * ndotl;
+
+    return blinn_phong_shade(lightStrength, lightVec, normal, to_eye, mat);
+}
+
+layout(location = 0) out vec4 fc;
 
 void main() {
     // vec4 diffuse_color = texture(diffuse_sampler, fs_in.st).rgba;
@@ -153,13 +133,13 @@ void main() {
     vec3 normal_w = normalize(fs_in.normal_w);
 
     Material mat = object_material;
-    // mat.diffuse_albedo = vec4(0.99, 0.90, 0.99, 1.0);
+    mat.diffuse_albedo = vec4(0.99, 0.90, 0.99, 1.0);
 
     for (int i = 0; i < NUM_DIR_LIGHTS; ++i) {
         DirLight l = dir_lights[i];
-        frag_color += calc_dir_light_contrib(l, mat, normal_w, normalize(eye_pos - fs_in.pos_w));
+        frag_color += calc_dir_light_contrib(l, mat, normal_w, normalize(u_camPosition.xyz - fs_in.pos_w));
     }
 
     fc = vec4(frag_color, diffuse_color.a);
-    // fc = vec4(1.0, 1.0, 1.0, 1.0);
 }
+

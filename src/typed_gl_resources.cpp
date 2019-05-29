@@ -47,7 +47,8 @@ RenderManager::RenderManager(fo::Allocator &backing_allocator)
     _cached_blendfunc_states[0].set_default();
 
     // First entry of the `_fbos` array is just a default constructed NewFBO, denoting default framebuffer.
-    fo::push_back(_fbos, {});
+    var_ &default_fbo = fo::push_back(_fbos, {});
+    default_fbo._is_default_fbo = true;
 }
 
 void shutdown_render_manager(RenderManager &self) { UNUSED(self); }
@@ -109,7 +110,7 @@ create_buffer_common(RenderManager &rm, const BufferCreateInfo &ci, GLObjectKind
     glGenBuffers(1, &gl_handle);
     glBindBuffer(gl_target, gl_handle);
 
-    const auto gl_flags = gl_buffer_access(ci.flags);
+    const_ gl_flags = gl_buffer_access(ci.flags);
 
     if (ci.flags & BufferCreateBitflags::USE_BUFFER_STORAGE) {
         glBufferStorage(gl_target, ci.bytes, ci.init_data, gl_flags);
@@ -117,10 +118,10 @@ create_buffer_common(RenderManager &rm, const BufferCreateInfo &ci, GLObjectKind
         glBufferData(gl_target, ci.bytes, ci.init_data, gl_flags);
     }
 
-    const auto rmid = new_resource_id(rm);
-    const auto id64 = encode_glresource64(rmid, buffer_kind, gl_handle);
+    const_ rmid = new_resource_id(rm);
+    const_ id64 = encode_glresource64(rmid, buffer_kind, gl_handle);
 
-    const auto table_p = rm._kind_to_buffer[(u32)buffer_kind];
+    const_ table_p = rm._kind_to_buffer[(u32)buffer_kind];
     fo::set(rm._rmid16_to_res64, rmid, id64);
 
     fo::set(*table_p, rmid, BufferInfo{ gl_handle, ci.bytes });
@@ -407,12 +408,13 @@ constexpr bool sampler_type_and_client_type_ok(TexelBaseType::E client_type,
     return ok;
 }
 
-Texture2DHandle create_texture_2d(RenderManager &self, TextureCreateInfo texture_ci) {
+Texture2DHandle create_texture_2d(RenderManager &self, TextureCreateInfo texture_ci, const char *name) {
+#if 0
     std::once_flag once_flag;
 
     std::call_once(once_flag, []() {
         for (size_t i = 0; i < texel_info_to_gl_external_format.HASH_SLOTS; ++i) {
-            const auto &ext_format = texel_info_to_gl_external_format.items[i];
+            const_ &ext_format = texel_info_to_gl_external_format.items[i];
 
             if (ext_format.index == 0u) {
                 continue;
@@ -426,6 +428,8 @@ Texture2DHandle create_texture_2d(RenderManager &self, TextureCreateInfo texture
 
         printf("-------------------------------\n");
     });
+
+#endif
 
     LOG_F(INFO,
           "texture_ci.width,height,depth = %u, %u, %u",
@@ -445,9 +449,9 @@ Texture2DHandle create_texture_2d(RenderManager &self, TextureCreateInfo texture
     glGenTextures(1, &gl_handle);
     glBindTexture(GL_TEXTURE_2D, gl_handle);
 
-    const auto texel_info = texture_ci.texel_info;
+    const_ texel_info = texture_ci.texel_info;
 
-    const auto encoded_texel_info =
+    const_ encoded_texel_info =
         _ENCODE_TEXEL_INFO(texel_info.internal_type, texel_info.components, texel_info.interpret_type);
 
     LOG_F(INFO,
@@ -504,7 +508,7 @@ Texture2DHandle create_texture_2d(RenderManager &self, TextureCreateInfo texture
         CHECK_F(!external_format.invalid(), "Not a valid texel info - no corresponding external format");
 
         const fs::path &file_path = texture_ci.source.get_value<fs::path>();
-        const auto str_file = file_path.u8string();
+        const_ str_file = file_path.u8string();
 
         if (!fs::exists(file_path)) {
             ABORT_F("Failed to load image - file does not exist - '%s'", str_file.c_str());
@@ -532,7 +536,7 @@ Texture2DHandle create_texture_2d(RenderManager &self, TextureCreateInfo texture
             texture_ci.depth = 1;
             texture_ci.mips = 1;
 
-            const auto internal_format =
+            const_ internal_format =
                 channels_in_file == 1
                     ? GL_R8
                     : channels_in_file == 2 ? GL_RG8 : channels_in_file == 3 ? GL_RGB8 : GL_RGBA8;
@@ -595,6 +599,8 @@ Texture2DHandle create_texture_2d(RenderManager &self, TextureCreateInfo texture
     LOG_F(INFO, "gl_handle = %u", gl_handle);
     self._rmid16_to_res64[rmid16] = encode_glresource64(rmid16, GLObjectKind::TEXTURE_2D, gl_handle);
     CHECK_EQ_F((GLuint)GLResource64_GLuint_Mask::extract(self._rmid16_to_res64[rmid16]), gl_handle);
+
+    eng::set_texture_label(gl_handle, name);
 
     return Texture2DHandle{ rmid16 };
 }
@@ -851,9 +857,9 @@ const ShadersToUse get_shaders_used_by_program(const RenderManager &self,
                                                const ShaderProgramHandle &program) {
 
     ShadersToUse use;
-    for (const auto &entry : self._linked_shaders) {
+    for (const_ &entry : self._linked_shaders) {
         if ((u16)GLResource64_RMID_Mask::extract(entry.second()) == program.rmid()) {
-            const auto key = entry.first();
+            const_ key = entry.first();
             use.vs = (key.k0 & 0xffff0000u) >> 16;
             use.fs = (key.k0 & 0x0000ffffu);
             use.tc = (key.k1 & 0xffff0000u) >> 16;
@@ -869,7 +875,7 @@ fo_ss::Buffer ShadersToUse::source_paths_as_string(const RenderManager &rm) cons
     using namespace fo_ss;
 
     static_assert(sizeof(ShadersToUse) == sizeof(u16) * 6, "Need this for the following");
-    const auto rmid_array = reinterpret_cast<const u16 *>(this);
+    const_ rmid_array = reinterpret_cast<const u16 *>(this);
 
     Buffer ss;
 
@@ -880,7 +886,7 @@ fo_ss::Buffer ShadersToUse::source_paths_as_string(const RenderManager &rm) cons
             continue;
         }
 
-        find_with_end(rm._shaders, rmid_array[i]).if_found([&](const auto _, const ShaderInfo &info) {
+        find_with_end(rm._shaders, rmid_array[i]).if_found([&](const_ _, const ShaderInfo &info) {
             ss << types[i] << ": " << rm._shader_paths.get(info.path_str_index) << "\n";
         });
     }
@@ -1054,7 +1060,7 @@ FboId create_fbo(RenderManager &self,
 
     fo::push_back(self._fbos, new_fbo);
 
-    for (const auto &a : clear_attachments) {
+    for (const_ &a : clear_attachments) {
         new_fbo.clear_attachment_after_bind(a.attachment, a.clear_value);
     }
 
@@ -1065,6 +1071,27 @@ void bind_destination_fbo(eng::RenderManager &rm,
                           FboId fbo_id,
                           const ::StaticVector<i32, MAX_FRAGMENT_OUTPUTS> &attachment_map) {
     const NewFBO &fbo = rm._fbos[fbo_id._id];
+
+    LOCAL_FUNC clear_attachments = [&fbo]() {
+        // TODO: Check if this attachment is actually bound as a draw buffer. Otherwise this can fail. Not too
+        // important though.
+
+        for (u32 i = 0; i < fbo._attachments_to_clear.filled_size(); ++i) {
+            const_ &a = fbo._attachments_to_clear[i];
+            glClearBufferfv(a.attachment == -1 ? GL_DEPTH : GL_COLOR,
+                            a.attachment == -1 ? 0 : a.attachment,
+                            reinterpret_cast<const GLfloat *>(&a.clear_value));
+        }
+    };
+
+    // For default framebuffer, this is enough.
+    if (fbo._is_default_fbo) {
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        GLuint color_attachment = GL_BACK_LEFT;
+        glDrawBuffers(1, &color_attachment);
+        clear_attachments();
+        return;
+    }
 
     StaticVector<GLenum, MAX_FRAGMENT_OUTPUTS> gl_attachment_numbers;
     gl_attachment_numbers.fill_backing_array(GL_NONE);
@@ -1089,16 +1116,6 @@ void bind_destination_fbo(eng::RenderManager &rm,
 
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, GLResource64_GLuint_Mask::extract(fbo._fbo_id64));
     glDrawBuffers(MAX_FRAGMENT_OUTPUTS, gl_attachment_numbers.data());
-
-    // TODO: Check if this attachment is actually bound as a draw buffer. Otherwise this can fail. Not too
-    // important though.
-
-    for (u32 i = 0; i < fbo._attachments_to_clear.filled_size(); ++i) {
-        const auto &a = fbo._attachments_to_clear[i];
-        glClearBufferfv(a.attachment == -1 ? GL_DEPTH : GL_COLOR,
-                        a.attachment == -1 ? 0 : a.attachment,
-                        reinterpret_cast<const GLfloat *>(&a.clear_value));
-    }
 }
 
 void bind_source_fbo(eng::RenderManager &rm, FboId fbo_id, i32 attachment_number) {
@@ -1168,7 +1185,7 @@ TU_LOCAL void create_common_vaos(RenderManager &self) {
                    VaoFormatDesc::from_attribute_formats(
                        { { 3, GL_FLOAT, GL_FALSE, 0, 0 },
                          { 3, GL_FLOAT, GL_FALSE, sizeof(fo::Vector3), 0 },
-                         { 2, GL_FLOAT, GL_FALSE, sizeof(fo::Vector3) + sizeof(fo::Vector2), 0 } }),
+                         { 2, GL_FLOAT, GL_FALSE, sizeof(fo::Vector3) + sizeof(fo::Vector3), 0 } }),
                    "@vao_pos_normal_uv_3d");
 
     // Pos, Normal, Texcoord2d, Tangent

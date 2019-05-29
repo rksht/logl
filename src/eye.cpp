@@ -63,17 +63,14 @@ void Camera::set_orthogonal_axes(const fo::Vector3 &target_pos,
     _eye.orientation = versor_from_matrix(Matrix4x4{ x, y, z, p });
 }
 
-void Camera::look_at(const Vector3 &target_pos, const Vector3 &current_pos) {
+void Camera::look_at(const Vector3 &target_pos, const Vector3 &current_pos, const fo::Vector3 &up_vector) {
     _eye.position = current_pos;
-    Vector3 new_fwd = normalize(target_pos - _eye.position);
-    Vector3 old_fwd = forward();
-    Vector3 new_up = cross(old_fwd, new_fwd);
-    f32 m = magnitude(new_up);
+    f32 m = magnitude(up_vector);
     m = std::max(-1.0f, m);
     m = std::min(m, 1.0f);
     f32 angle = std::asin(m);
 
-    auto q = versor_from_axis_angle(normalize(new_up), angle);
+    auto q = versor_from_axis_angle(up_vector / m, angle);
     _eye.orientation = q * _eye.orientation;
     update_view_transform();
 }

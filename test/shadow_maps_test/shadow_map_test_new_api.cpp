@@ -58,6 +58,8 @@ namespace shadow_map
 
     void init(ShadowMap &m, const InitInfo &init_info)
     {
+        m.texture_size = init_info.texture_size;
+
         auto sampler_desc = eng::default_sampler_desc;
         sampler_desc.set_wrap_mode_all(GL_CLAMP_TO_EDGE);
         m.visualizing_sampler = eng::create_sampler_object(eng::g_rm(), sampler_desc);
@@ -80,7 +82,7 @@ namespace shadow_map
         texture_ci.texel_info.internal_type = eng::TexelBaseType::FLOAT;
         texture_ci.texel_info.interpret_type = eng::TexelInterpretType::UNNORMALIZED;
 
-        m.recorded_depth_texture = eng::create_texture_2d(eng::g_rm(), texture_ci);
+        m.recorded_depth_texture = eng::create_texture_2d(eng::g_rm(), texture_ci, "tex2d@depth_record");
         m.recorded_depth_fbo = eng::create_fbo(
           eng::g_rm(),
           {},
@@ -119,6 +121,12 @@ namespace shadow_map
         m.eye_block.proj.z = Vec4{ 0.f, 0.f, -2.0f / info.neg_z_extent, 0.f };
         m.eye_block.proj.t = Vec4{ 0.f, 0.f, -1.f, 1.f };
 
+        m.eye_block.camera_position = Vec4(m.light_position, 1);
+        m.eye_block.camera_orientation = fo::Vector4{};
+
+        print_matrix_classic("LightView_From_World", m.eye_block.view);
+        print_matrix_classic("Light_OBB_Clip_From_World", m.eye_block.proj);
+
         m.light_direction = info.light_direction;
         m.light_position = info.light_position;
     }
@@ -139,6 +147,7 @@ namespace shadow_map
     void bind_comparing_sampler(ShadowMap &m, GLuint sampler_bindpoint)
     {
         glBindSampler(sampler_bindpoint, eng::gluint_from_globjecthandle(m.comparing_sampler));
+        glBindTextureUnit(sampler_bindpoint, eng::gluint_from_globjecthandle(m.recorded_depth_texture));
     }
 
     // Clears the depth texture (fills with 1.0f)
@@ -235,6 +244,8 @@ struct Material {
     f32 shininess;
 };
 
+static_assert(sizeof(Material) == 8 * sizeof(f32), "Not compatible with GLSL side struct Material");
+
 constexpr Vec4 mul_rgb(Vec4 color, float k) { return Vec4(Vec3(color) * k, color.w); }
 
 constexpr Material BALL_MATERIAL = { mul_rgb(colors::Tomato, 5.0f), Vec3{ 0.8f, 0.8f, 0.9f }, 0.7f };
@@ -265,6 +276,17 @@ struct RenderableData {
     PerObjectData uniform_data = { eng::math::identity_matrix, eng::math::identity_matrix, {} };
 };
 
+namespace std
+{
+    auto &operator<<(std::ostream &s, const RenderableData &rd)
+    {
+        s << "RenderableData{ vbo_handle=" << rd.vbo_handle.rmid() << ", ebo_handle=" << rd.ebo_handle.rmid()
+          << ", vao_handle=" << rd.vao_handle.rmid() << ", packed_attr_size=" << rd.packed_attr_size
+          << ", num_indices=" << rd.num_indices << " }";
+        return s;
+    }
+} // namespace std
+
 struct DirLightInfo {
     alignas(16) Vec3 position;
     alignas(16) Vec3 direction;
@@ -294,7 +316,7 @@ struct ShadowRelatedUniforms {
 // edit in code.
 std::vector<RenderableShape> g_scene_objects = {
     {
-      ShapeSphere{ Vec3{ 0.0f, 3.2f, -10.0f }, 3.0f },
+      ShapeSphere{ Vec3{ 0.0f, 0.0f, -10.0f }, 3.0f },
     },
     {
       ShapeSphere{ Vec3{ 0.0f, 3.2f, 10.0f }, 3.0f },
@@ -434,10 +456,11 @@ struct App {
     bool do_render_png_blit = false;
 };
 
-inline void update_camera_eye_block(App &app, float frame_time_in_sec)
+inline void update_camera_eye_block(App &app)
 {
     app.eye_block.camera_position = Vec4(app.camera.position(), 1.0f);
     app.eye_block.view = app.camera.view_xform();
+    app.eye_block.proj = app.camera.proj_xform();
 }
 
 struct TonemapParamsUB {
@@ -455,6 +478,8 @@ void create_uniform_buffers(App &app)
         buffer_ci.init_data = nullptr;
         buffer_ci.name = "@camera_ubo";
         app.uniform_buffers.camera_ubo = create_uniform_buffer(g_rm(), buffer_ci);
+
+        fmt::print("sizeof uniform buffer @camera_ubo = {}\n", buffer_ci.bytes);
     }
 
     {
@@ -467,6 +492,8 @@ void create_uniform_buffers(App &app)
         buffer_ci.name = "@dir_lights_list_ubo";
 
         app.uniform_buffers.dir_lights_list = create_uniform_buffer(g_rm(), buffer_ci);
+
+        fmt::print("sizeof uniform buffer @dir_lights_list_ubo = {}\n", buffer_ci.bytes);
     }
 
     {
@@ -479,6 +506,8 @@ void create_uniform_buffers(App &app)
         buffer_ci.name = "@per_object_data_ubo";
 
         app.uniform_buffers.per_object_data = create_uniform_buffer(g_rm(), buffer_ci);
+
+        fmt::print("sizeof uniform buffer @per_object_data_ubo = {}\n", buffer_ci.bytes);
     }
 
     {
@@ -490,6 +519,8 @@ void create_uniform_buffers(App &app)
         buffer_ci.init_data = nullptr;
         buffer_ci.name = "@shadow_related_ubo";
         app.uniform_buffers.shadow_related = create_uniform_buffer(g_rm(), buffer_ci);
+
+        fmt::print("sizeof uniform buffer @shadow_related_ubo = {}\n", buffer_ci.bytes);
     }
 
     {
@@ -502,12 +533,14 @@ void create_uniform_buffers(App &app)
         buffer_ci.name = "@tonemap_params_ubo";
 
         app.uniform_buffers.tonemap_params = create_uniform_buffer(g_rm(), buffer_ci);
+
+        fmt::print("sizeof uniform buffer @tonemap_params_ubo = {}\n", buffer_ci.bytes);
     }
 }
 
 void load_debug_box_texture(App &app)
 {
-    const auto file_path = make_path(generic_path(LOGL_DATA_DIR), "bowsette_1366x768.png");
+    const_ file_path = make_path(generic_path(LOGL_DATA_DIR), "bowsette_1366x768.png");
 
     TextureCreateInfo texture_ci;
 
@@ -544,7 +577,7 @@ void load_without_shadow_program(App &app)
 
 void load_shadow_map_programs(App &app)
 {
-    const auto defs_str = app.shader_defs.get_string();
+    const_ defs_str = app.shader_defs.get_string();
 
     // CHECK_F(false);
 
@@ -611,26 +644,29 @@ void load_shadow_map_programs(App &app)
 }
 
 const char *fs_quad_vs_source = R"(#version 430 core
-    out VsOut {
-        vec2 uv;
-    } vsout;
+out VsOut {
+vec2 uv;
+} vsout;
 
-    void main() {
-        const uint id = 2 - gl_VertexID;
-        gl_Position.x = float(id / 2) * 4.0 - 1.0;
-        gl_Position.y = float(id % 2) * 4.0 - 1.0;
-        gl_Position.z = -1.0;
-        gl_Position.w = 1.0;
+void main() {
+const uint id = 2 - gl_VertexID;
+gl_Position.x = float(id / 2) * 4.0 - 1.0;
+gl_Position.y = float(id % 2) * 4.0 - 1.0;
+gl_Position.z = -1.0;
+gl_Position.w = 1.0;
 
-        vsout.uv.x = float(id / 2) * 2.0;
-        vsout.uv.y = float(id % 2) * 2.0;
-    }
+vsout.uv.x = float(id / 2) * 2.0;
+vsout.uv.y = float(id % 2) * 2.0;
+}
 )";
 
 void set_up_camera(App &app)
 {
-    const float distance = 20.0f;
-    const float y_extent = 15.0f;
+    app.eye_block = eng::CameraTransformUB{};
+
+#if 0
+    const_ distance = 20.0f;
+    const_ y_extent = 15.0f;
 
     app.camera.set_proj(0.1f,
                         1000.0f,
@@ -638,11 +674,29 @@ void set_up_camera(App &app)
                         // 70.0f * one_deg_in_rad,
                         constants::window_height / float(constants::window_width));
 
-    app.camera._eye = eye::toward_negz(10.0f);
+#endif
+
+    app.camera.set_proj(
+      0.1f, 1000.0f, 70.0f * math::one_deg_in_rad, constants::window_height / (float)constants::window_width);
+
+    app.camera._eye = eye::toward_negz(20.0f);
+
     app.camera.update_view_transform();
+
+#if 0
+    app.camera.look_at(
+      g_scene_objects.at(0).as<ShapeSphere>().center, app.camera._eye.position, eng::math::unit_y);
+#endif
+
+    // app.camera.update_view_transform();
+
+    app.eye_block.view = app.camera.view_xform();
 
     // Only need to store the camera's projection once
     app.eye_block.proj = app.camera.proj_xform();
+
+    ::print_matrix_classic("CameraView_From_World", app.eye_block.view);
+    ::print_matrix_classic("FrustumClip_From_World", app.eye_block.proj);
 
     // The quad blitting eye block also needs to be initialized. Using identity matrices for these two.
     // The ortho projection will be done via the world transform.
@@ -773,15 +827,15 @@ void read_bindpoints_from_programs(App &app)
         InspectedGLSL glsl(eng::get_gluint_from_rmid(g_rm(), shader_program.rmid()),
                            eng::pmr_default_resource());
 
-        const auto &uniform_blocks = glsl.GetUniformBlocks();
+        const_ &uniform_blocks = glsl.GetUniformBlocks();
 
-        for (const auto &block : uniform_blocks) {
+        for (const_ &block : uniform_blocks) {
             bindpoints_out.uniform_blocks[block.name] = (GLuint)block.bufferBinding;
         }
 
-        for (const auto &uniform : glsl.GetUniforms()) {
+        for (const_ &uniform : glsl.GetUniforms()) {
             if (uniform.optSamplerInfo) {
-                const auto &sampler_info = uniform.optSamplerInfo.value();
+                const_ &sampler_info = uniform.optSamplerInfo.value();
                 LOG_F(INFO,
                       "Sampler %s bound by default to unit %u",
                       uniform.name.c_str(),
@@ -798,6 +852,7 @@ void read_bindpoints_from_programs(App &app)
 
     read_bindpoints_for_program(app.shader_programs.with_shadow, app.with_shadow_bindpoints);
     read_bindpoints_for_program(app.shader_programs.build_depth_map, app.build_depth_map_bindpoints);
+    read_bindpoints_for_program(app.shader_programs.without_shadow, app.without_shadow_bindpoints);
 
 #if 0
     app.shader_defs.add("PER_OBJECT_UBLOCK_BINDING", (int)app.bound_ubos.per_object.binding);
@@ -820,9 +875,9 @@ void read_bindpoints_from_programs(App &app)
 // -----
 void build_geometry_buffers_and_bounding_sphere(App &app)
 {
-    const auto build_buffer = [&](const mesh::MeshData &mesh_data, const char *shape_name) {
-        const auto vbo_name = fmt::format("@vbo_{}", shape_name);
-        const auto ebo_name = fmt::format("@ebo_{}", shape_name);
+    const_ build_buffer = [&](const mesh::MeshData &mesh_data, const char *shape_name) {
+        const_ vbo_name = fmt::format("@vbo_{}", shape_name);
+        const_ ebo_name = fmt::format("@ebo_{}", shape_name);
 
         BufferCreateInfo buffer_info;
         buffer_info.bytes = mesh_data.o.get_vertices_size_in_bytes();
@@ -859,11 +914,14 @@ void build_geometry_buffers_and_bounding_sphere(App &app)
     app.vao_pos = eng::g_rm().pos_vao;
     app.vao_opaque_shapes = eng::g_rm().pnu_vao;
 
+    LOG_F(INFO, "app.vao_opaque_shapes = %u", app.vao_opaque_shapes.rmid());
+    LOG_F(INFO, "app.vao_pos = %u", app.vao_pos.rmid());
+
     // Positions of all vertices in the scene
     fo::Array<Vec3> all_positions;
     fo::reserve(all_positions, 512);
 
-    for (const auto &object : g_scene_objects) {
+    for (const_ &object : g_scene_objects) {
         app.opaque_renderables.push_back(RenderableData{});
         auto &rd = app.opaque_renderables.back();
 
@@ -872,7 +930,7 @@ void build_geometry_buffers_and_bounding_sphere(App &app)
             VT_CASE(object, ShapeSphere)
                 :
             {
-                const auto &sphere = get_value<ShapeSphere>(object);
+                const_ &sphere = get_value<ShapeSphere>(object);
                 auto &world_from_local = rd.uniform_data.world_from_local;
                 rd.uniform_data.world_from_local =
                   xyz_scale_matrix(sphere.radius, sphere.radius, sphere.radius);
@@ -895,7 +953,7 @@ void build_geometry_buffers_and_bounding_sphere(App &app)
                     fo::push_back(positions, transform_point(world_from_local, *itr));
                 }
 
-                for (const auto &p : positions) {
+                for (const_ &p : positions) {
                     push_back(all_positions, p);
                 }
             }
@@ -904,7 +962,7 @@ void build_geometry_buffers_and_bounding_sphere(App &app)
             VT_CASE(object, ShapeCube)
                 :
             {
-                const auto &cube = get_value<ShapeCube>(object);
+                const_ &cube = get_value<ShapeCube>(object);
                 auto &world_from_local = rd.uniform_data.world_from_local;
 
                 rd.uniform_data.world_from_local = xyz_scale_matrix(cube.extent);
@@ -926,66 +984,15 @@ void build_geometry_buffers_and_bounding_sphere(App &app)
                     fo::push_back(positions, transform_point(world_from_local, *itr));
                 }
 
-                for (const auto &p : positions) {
+                for (const_ &p : positions) {
                     push_back(all_positions, p);
                 }
 
-                for (const auto &p : positions) {
+                for (const_ &p : positions) {
                     push_back(all_positions, p);
                 }
             }
             break;
-
-#if 0
-
-            VT_CASE(object, ShapeModelPath)
-                :
-            {
-                const auto &model_info = get_value<ShapeModelPath>(object);
-
-                rd.uniform_data.world_from_local = xyz_scale_matrix(model_info.scale);
-
-                rd.uniform_data.world_from_local = rd.uniform_data.world_from_local *
-                  rotation_matrix(unit_z, model_info.euler_xyz_m.z);
-                rd.uniform_data.world_from_local = rd.uniform_data.world_from_local *
-                  rotation_matrix(unit_y, model_info.euler_xyz_m.y);
-                rd.uniform_data.world_from_local = rd.uniform_data.world_from_local *
-                  rotation_matrix(unit_x, model_info.euler_xyz_m.x);
-
-                rd.uniform_data.world_from_local_inv =
-                  inverse(rd.uniform_data.world_from_local);
-
-                translate_update(rd.uniform_data.world_from_local, model_info.position);
-
-                print_matrix_classic("Model's matrix", rd.uniform_data.world_from_local);
-
-                mesh::Model model;
-                CHECK_F(mesh::load(model,
-                                   model_info.path.u8string().c_str(),
-                                   Vector2{ 0.0f, 0.0f },
-                                   mesh::CALC_TANGENTS | mesh::TRIANGULATE | mesh::CALC_NORMALS |
-                                     mesh::FILL_CONST_UV));
-                // CHECK_EQ_F(size(model._mesh_array), 1);
-                auto &mesh_data = model[0];
-
-                glGenBuffers(1, &rd.vbo);
-                glGenBuffers(1, &rd.ebo);
-                glBindBuffer(GL_ARRAY_BUFFER, rd.vbo);
-                glBufferData(
-                  GL_ARRAY_BUFFER, vertex_buffer_size(mesh_data), mesh_data.buffer, GL_STATIC_DRAW);
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, rd.ebo);
-                glBufferData(
-                  GL_ELEMENT_ARRAY_BUFFER, index_buffer_size(mesh_data), indices(mesh_data), GL_STATIC_DRAW);
-
-                CHECK_NE_F(mesh_data.normal_offset, mesh::ATTRIBUTE_NOT_PRESENT);
-                CHECK_NE_F(mesh_data.tex2d_offset, mesh::ATTRIBUTE_NOT_PRESENT);
-
-                rd.packed_attr_size = mesh_data.packed_attr_size;
-                rd.num_indices = num_indices(mesh_data);
-            }
-            break;
-
-#endif
 
         default:
             assert(false && "Not implemented for this object");
@@ -1032,6 +1039,8 @@ void build_geometry_buffers_and_bounding_sphere(App &app)
         app.rd_screen_quad.uniform_data.world_from_local =
           orthographic_projection(0.0f, 0.0f, (f32)constants::window_width, (f32)constants::window_height);
     }
+
+    std::cout << "Opaque renderables = " << app.opaque_renderables << "\n";
 }
 
 // ---------
@@ -1095,14 +1104,17 @@ void set_up_lights(App &app)
             constants::light_count,
             g_dir_lights.size());
 
-    // For each light, insert a cube renderable
+// For each light, insert a cube renderable
+//
+#if 0
 
     for (size_t i = 0; i < g_dir_lights.size(); ++i) {
-        // const auto &l = g_dir_lights[i];
+        // const_ &l = g_dir_lights[i];
 
         auto &rd = push_back_get(app.opaque_renderables, RenderableData{});
         rd.vbo_handle = app.vbos.cube;
         rd.ebo_handle = app.ebos.cube;
+        rd.vao_handle = app.vao_opaque_shapes;
         rd.uniform_data.world_from_local = translation_matrix(position_store[i]);
         rd.uniform_data.world_from_local_inv = translation_matrix(-position_store[i]);
         rd.packed_attr_size = app.stripped_meshes.cube.packed_attr_size;
@@ -1110,9 +1122,12 @@ void set_up_lights(App &app)
         rd.uniform_data.material = LIGHT_GIZMO_MATERIAL;
     }
 
+#endif
+
     LOG_F(INFO, "Added lights to scene");
 }
 
+#if 0
 void set_up_casting_light_gizmo(App &app)
 {
     mesh::Model m;
@@ -1126,14 +1141,14 @@ void set_up_casting_light_gizmo(App &app)
     glGenBuffers(1, &ebo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferData(GL_ARRAY_BUFFER,
-                 md.o.get_vertices_size_in_bytes(),
-                 md.buffer + md.o.get_vertices_byte_offset(),
-                 GL_STATIC_DRAW);
+    md.o.get_vertices_size_in_bytes(),
+    md.buffer + md.o.get_vertices_byte_offset(),
+    GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-                 md.o.get_indices_size_in_bytes(),
-                 md.buffer + md.o.get_indices_size_in_bytes(),
-                 GL_STATIC_DRAW);
+    md.o.get_indices_size_in_bytes(),
+    md.buffer + md.o.get_indices_size_in_bytes(),
+    GL_STATIC_DRAW);
 
     auto &rd = app.rd_casting_light;
 
@@ -1144,14 +1159,16 @@ void set_up_casting_light_gizmo(App &app)
     rd.uniform_data.material = PINK_MATERIAL;
     rd.uniform_data.world_from_local = inverse_rotation_translation(light_from_world_xform(app.shadow_map));
 }
+#endif
 
 void init_render_states(App &app)
 {
     // Rasterizer states (all are same. Might change the depth bias later for second pass)
 
-    auto rs = eng::default_rasterizer_state_desc;
+    var_ rs = eng::default_rasterizer_state_desc;
     // rs.slope_scaled_depth_bias = 3.0f;
     // rs.constant_deph_bias = 4;
+    rs.cull_side = GL_NONE;
 
     app.rasterizer_states.first_pass = eng::create_rs_state(eng::g_rm(), rs);
     app.rasterizer_states.second_pass = app.rasterizer_states.first_pass;
@@ -1159,7 +1176,7 @@ void init_render_states(App &app)
 
     // Depth stencil states (all are same, really)
 
-    auto ds = eng::default_depth_stencil_desc;
+    var_ ds = eng::default_depth_stencil_desc;
     app.depth_states.without_shadows = eng::create_ds_state(eng::g_rm(), ds);
     app.depth_states.first_pass = app.depth_states.without_shadows;
     app.depth_states.second_pass = app.depth_states.without_shadows;
@@ -1273,10 +1290,18 @@ void render_to_depth_map(App &app)
     // Set the depth buffer as current render target, and clear it.
     shadow_map::set_as_draw_fbo(app.shadow_map, eng::FboId::for_default_fbo());
 
+    // Set program
+    eng::set_program(eng::g_rm(), app.shader_programs.build_depth_map);
+
     // Set the eye transforms
     source_eye_block_uniform(app, app.shadow_map.eye_block);
-
-    eng::set_program(eng::g_rm(), app.shader_programs.build_depth_map);
+    const_ camera_transform_gluint = eng::gluint_from_globjecthandle(app.uniform_buffers.camera_ubo);
+    glBindBuffer(GL_UNIFORM_BUFFER, camera_transform_gluint);
+    glBindBufferRange(GL_UNIFORM_BUFFER,
+                      app.build_depth_map_bindpoints.uniform_blocks.at("ublock_EyeBlock"),
+                      camera_transform_gluint,
+                      0,
+                      sizeof(eng::CameraTransformUB));
 
     // Render all opaque objects
     glBindVertexArray(eng::gluint_from_globjecthandle(app.vao_opaque_shapes));
@@ -1284,12 +1309,12 @@ void render_to_depth_map(App &app)
     glBindBuffer(GL_UNIFORM_BUFFER, eng::gluint_from_globjecthandle(app.uniform_buffers.per_object_data));
 
     glBindBufferRange(GL_UNIFORM_BUFFER,
-                      app.with_shadow_bindpoints.uniform_blocks.at("ublock_PerObject"),
+                      app.build_depth_map_bindpoints.uniform_blocks.at("ublock_PerObject"),
                       eng::gluint_from_globjecthandle(app.uniform_buffers.per_object_data),
                       0,
                       sizeof(PerObjectData));
 
-    for (const auto range : app.shape_ranges) {
+    for (const_ range : app.shape_ranges) {
         auto &rd0 = app.opaque_renderables[range.first];
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, eng::gluint_from_globjecthandle(rd0.ebo_handle));
@@ -1345,7 +1370,8 @@ void render_second_pass(App &app)
     begin_timer(app.timer_manager, "second_pass");
     DEFERSTAT(end_timer(app.timer_manager, "second_pass"));
 
-    eng::bind_destination_fbo(eng::g_rm(), app.screen_fbo, { -1 });
+    eng::bind_destination_fbo(eng::g_rm(), app.screen_fbo, {});
+
     eng::set_rs_state(eng::g_rm(), app.rasterizer_states.first_pass);
     eng::set_ds_state(eng::g_rm(), app.depth_states.second_pass);
 
@@ -1358,12 +1384,12 @@ void render_second_pass(App &app)
     app.shadow_related.shadow_xform = app.shadow_map.clip_from_world;
     app.shadow_related.scene_bs = app.scene_bounding_sphere;
 
-    const auto shadow_related_gluint = eng::gluint_from_globjecthandle(app.uniform_buffers.shadow_related);
+    const_ shadow_related_gluint = eng::gluint_from_globjecthandle(app.uniform_buffers.shadow_related);
 
     source_to_uniform_buffer(
       eng::g_rm(),
       app.uniform_buffers.shadow_related,
-      eng::SourceToBufferInfo::after_discard(reinterpret_cast<void *>(&app.shadow_related), 0));
+      eng::SourceToBufferInfo::after_discard(reinterpret_cast<const void *>(&app.shadow_related), 0));
 
     glBindBuffer(GL_UNIFORM_BUFFER, shadow_related_gluint);
 
@@ -1383,8 +1409,11 @@ void render_second_pass(App &app)
                           0,
                           sizeof(ShadowRelatedUniforms));
 
-        shadow_map::bind_comparing_sampler(app.shadow_map,
-                                           app.with_shadow_bindpoints.sampled_textures["comparing_sampler"]);
+        shadow_map::bind_comparing_sampler(
+          app.shadow_map, app.with_shadow_bindpoints.sampled_textures.at("comparing_sampler"));
+
+        glBindTextureUnit(app.with_shadow_bindpoints.sampled_textures.at("comparing_sampler"),
+                          eng::gluint_from_globjecthandle(app.shadow_map.recorded_depth_texture));
 
         DCHECK_NE_F(app.opaque_renderables[0].vao_handle.rmid(), 0);
 
@@ -1392,7 +1421,7 @@ void render_second_pass(App &app)
 
         // Lights
 
-        const auto dir_lights_gluint = eng::gluint_from_globjecthandle(app.uniform_buffers.dir_lights_list);
+        const_ dir_lights_gluint = eng::gluint_from_globjecthandle(app.uniform_buffers.dir_lights_list);
 
         glBindBuffer(GL_UNIFORM_BUFFER, dir_lights_gluint);
         glBindBufferRange(GL_UNIFORM_BUFFER,
@@ -1402,8 +1431,7 @@ void render_second_pass(App &app)
                           vec_bytes(g_dir_lights));
 
         // Per object data
-        const auto per_object_data_gluint =
-          eng::gluint_from_globjecthandle(app.uniform_buffers.per_object_data);
+        const_ per_object_data_gluint = eng::gluint_from_globjecthandle(app.uniform_buffers.per_object_data);
 
         glBindBuffer(GL_UNIFORM_BUFFER, per_object_data_gluint);
 
@@ -1413,7 +1441,7 @@ void render_second_pass(App &app)
                           0,
                           sizeof(PerObjectData));
 
-        for (const auto range : app.shape_ranges) {
+        for (const_ range : app.shape_ranges) {
             auto &rd0 = app.opaque_renderables[range.first];
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, eng::gluint_from_globjecthandle(rd0.ebo_handle));
             glBindVertexBuffer(0, eng::gluint_from_globjecthandle(rd0.vbo_handle), 0, rd0.packed_attr_size);
@@ -1430,54 +1458,93 @@ void render_second_pass(App &app)
     }
 }
 
-void render_with_shadow(App &app)
+void render_without_shadow(App &app)
 {
-    static bool captured_once = false;
+    static bool did_capture_first_frame = false;
+
+    if (!did_capture_first_frame) {
+        did_capture_first_frame = true;
+        eng::trigger_renderdoc_frame_capture(1);
+    }
+
+    eng::bind_destination_fbo(eng::g_rm(), app.screen_fbo, {});
+
+    glViewport(0, 0, constants::window_width, constants::window_height);
+
+    eng::set_program(eng::g_rm(), app.shader_programs.without_shadow);
+
+    begin_timer(app.timer_manager, "second_pass");
+    DEFERSTAT(end_timer(app.timer_manager, "second_pass"));
+
+    eng::set_rs_state(eng::g_rm(), app.rasterizer_states.first_pass);
+    eng::set_ds_state(eng::g_rm(), app.depth_states.second_pass);
+
+    glDisable(GL_BLEND);
+
+    // Source the main camera's eye block.
+    source_eye_block_uniform(app, app.eye_block);
+
+    const_ camera_transform_gluint = eng::gluint_from_globjecthandle(app.uniform_buffers.camera_ubo);
+    glBindBuffer(GL_UNIFORM_BUFFER, camera_transform_gluint);
+    glBindBufferRange(GL_UNIFORM_BUFFER,
+                      app.without_shadow_bindpoints.uniform_blocks.at("ublock_EyeBlock"),
+                      camera_transform_gluint,
+                      0,
+                      sizeof(eng::CameraTransformUB));
+
     {
-        render_to_depth_map(app);
-        render_second_pass(app);
-        if (!captured_once) {
-            eng::trigger_renderdoc_frame_capture(1);
+        glBindVertexArray(eng::gluint_from_globjecthandle(app.opaque_renderables[0].vao_handle));
+
+        // Lights
+
+        const_ dir_lights_gluint = eng::gluint_from_globjecthandle(app.uniform_buffers.dir_lights_list);
+
+        glBindBuffer(GL_UNIFORM_BUFFER, dir_lights_gluint);
+        glBindBufferRange(GL_UNIFORM_BUFFER,
+                          app.without_shadow_bindpoints.uniform_blocks.at("DirLightsList"),
+                          dir_lights_gluint,
+                          0,
+                          vec_bytes(g_dir_lights));
+
+        // Per object data
+        const_ per_object_data_gluint = eng::gluint_from_globjecthandle(app.uniform_buffers.per_object_data);
+
+        glBindBuffer(GL_UNIFORM_BUFFER, per_object_data_gluint);
+        glBindBufferRange(GL_UNIFORM_BUFFER,
+                          app.without_shadow_bindpoints.uniform_blocks.at("ublock_PerObject"),
+                          per_object_data_gluint,
+                          0,
+                          sizeof(PerObjectData));
+
+        for (const_ &range : app.shape_ranges) {
+            if (range.second <= range.first) {
+                continue;
+            }
+
+            auto &rd0 = app.opaque_renderables[range.first];
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, eng::gluint_from_globjecthandle(rd0.ebo_handle));
+            glBindVertexBuffer(0, eng::gluint_from_globjecthandle(rd0.vbo_handle), 0, rd0.packed_attr_size);
+
+            for (size_t i = range.first; i < range.second; ++i) {
+                auto &rd = app.opaque_renderables[i];
+                source_per_object_uniforms(app, rd);
+
+                // Bind the per-object uniform
+                glDrawElements(GL_TRIANGLES, rd.num_indices, GL_UNSIGNED_SHORT, 0);
+            }
         }
     }
-
-#if 0
-    if (app.do_blur) {
-        render_post_blur(app);
-        if (!captured_once) {
-            eng::trigger_renderdoc_frame_capture(1);
-            captured_once = true;
-        }
-    }
-
-#endif
-
-    // tonemap_to_backbuffer(app);
 }
 
-#if 0
-    void render_png_blit(App &app)
-    {
-        // app.hdr_color_fbo.fbo().bind_as_writable();
-
-        app.hdr_color_fbo.fbo().bind_as_writable();
-
-        glUseProgram(app.shader_programs.png_blit);
-        glBindTextureUnit(app.textures.debug_box_texture.binding, app.textures.debug_box_texture.handle());
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-
-        // Blur
-        if (app.do_blur) {
-            render_pp_gaussian_blur(app.pp_gaussian_blur);
-        }
-
-        tonemap_to_backbuffer(app);
-    }
-
-#endif
+void render_with_shadow(App &app)
+{
+    render_to_depth_map(app);
+    render_second_pass(app);
+}
 
 void sort_shape_vbos(App &app)
 {
+    LOG_F(INFO, "Sorting vbos");
     std::sort(app.opaque_renderables.begin(),
               app.opaque_renderables.end(),
               [](const RenderableData &rd1, const RenderableData &rd2) {
@@ -1487,8 +1554,10 @@ void sort_shape_vbos(App &app)
     size_t start = 0;
     size_t i = start + 1;
 
+    const_ count = app.opaque_renderables.size();
+
     do {
-        while (i < app.opaque_renderables.size() &&
+        while (i < count &&
                app.opaque_renderables[i - 1].vbo_handle.rmid() ==
                  app.opaque_renderables[i].vbo_handle.rmid()) {
             i++;
@@ -1497,6 +1566,8 @@ void sort_shape_vbos(App &app)
         start = i;
         i++;
     } while (i < app.opaque_renderables.size());
+
+    app.shape_ranges.push_back({ start, std::min(start + 1, count) });
 }
 
 namespace app_loop
@@ -1507,6 +1578,11 @@ namespace app_loop
     template <> void init<App>(App &app)
     {
         auto t0 = std::chrono::high_resolution_clock::now();
+
+        // Set the clear value of the default fbo
+        eng::create_default_fbo(eng::g_rm(),
+                                { eng::AttachmentAndClearValue(eng::depth_attachment(), Vec4(-1, 0, 0, 0)),
+                                  eng::AttachmentAndClearValue(0, colors::AliceBlue) });
 
         // ImGui::CreateContext();
 #if 1
@@ -1531,9 +1607,11 @@ namespace app_loop
         set_up_lights(app);
         create_uniform_buffers(app);
         init_shadow_map(app);
-        init_uniform_data(app);
+
         set_up_camera(app);
-        set_up_casting_light_gizmo(app);
+        // set_up_casting_light_gizmo(app);
+
+        init_uniform_data(app);
 
         sort_shape_vbos(app);
 
@@ -1544,13 +1622,14 @@ namespace app_loop
         LOG_F(INFO, "Shader defines =\n%s", app.shader_defs.get_string().c_str());
 
         load_shadow_map_programs(app);
+        load_without_shadow_program(app);
         // load_tonemap_program(app);
         // load_png_blit_program(app);
 
         read_bindpoints_from_programs(app);
 
-        app.camera.move_upward(10.0f);
-        app.camera.move_forward(-20.0f);
+        // app.camera.move_upward(10.0f);
+        // app.camera.move_forward(-20.0f);
 
         auto t1 = std::chrono::high_resolution_clock::now();
 
@@ -1570,6 +1649,10 @@ namespace app_loop
         eng::gl_timer_query::done_adding(app.timer_manager);
 
         eng::gl_timer_query::set_disabled(app.timer_manager, true);
+
+        //         eng::create_default_fbo(eng::g_rm(), {}
+
+        std::cout << "Opaque renderables = " << app.opaque_renderables << "\n";
     }
 
     template <> void update<App>(App &app, State &state)
@@ -1598,21 +1681,32 @@ namespace app_loop
 
         time_in_sec += (float)state.frame_time_in_sec;
 
-        if (app.camera.needs_update() ||
-            eng::handle_eye_input(
-              eng::gl().window, app.camera._eye, state.frame_time_in_sec, app.camera._view_xform)) {
+        eng::handle_eye_input(
+          eng::gl().window, app.camera._eye, state.frame_time_in_sec, app.camera._view_xform);
 
-            app.camera.update_view_transform();
-            update_camera_eye_block(app, state.frame_time_in_sec);
-            app.camera.set_needs_update(false);
-        }
+        // app.camera.update_view_transform();
+
+        update_camera_eye_block(app);
+
+#if 0
+	if (app.camera.needs_update() ||
+	eng::handle_eye_input(
+	eng::gl().window, app.camera._eye, state.frame_time_in_sec, app.camera._view_xform)) {
+
+		app.camera.update_view_transform();
+	    update_camera_eye_block(app, state.frame_time_in_sec);
+	    app.camera.set_needs_update(false);
+	}
+
+#endif
     }
 
     template <> void render<App>(App &app)
     {
         eng::gl_timer_query::new_frame(app.timer_manager);
 
-        render_with_shadow(app);
+        // render_with_shadow(app);
+        render_without_shadow(app);
 
         {
             eng::gl_timer_query::begin_timer(app.timer_manager, "swap_buffer");
@@ -1673,4 +1767,3 @@ int main(int ac, char **av)
         app_loop::run(app, loop_state);
     }
 }
-

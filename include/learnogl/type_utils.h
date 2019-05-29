@@ -229,6 +229,8 @@ template <typename... Masks> inline constexpr auto set_masks(Masks... mask_value
 // Subclass of std::variant (or ::variant) which provides an assoc array from type to index, so you don't have
 // to remember it yourself when doing a switch-case. So use this one instead of original variant.
 template <typename... Types> struct VariantTable : public ::variant<Types...> {
+    using base_type = ::variant<Types...>;
+
     template <size_t n, typename... T> struct Rec;
 
     template <size_t n, typename T> struct Rec<n, T> {
@@ -245,8 +247,11 @@ template <typename... Types> struct VariantTable : public ::variant<Types...> {
     template <typename T> static constexpr size_t index = (size_t)assoc_array_get_t<assoc_array, T>::value;
 
     // Return reference to inner value
-    template <typename T> T &as() { return get_value<T>(*this); }
-    template <typename T> const T &as() const { return get_value<T>(*this); }
+    template <typename T> T &as() { return ::get_value<T>(static_cast<base_type &>(*this)); }
+
+    template <typename T> const T &as() const {
+        return ::get_value<T>(static_cast<const base_type &>(*this));
+    }
 
     template <typename T> bool isa() const { return ::type_index(*this) == index<T>; }
 

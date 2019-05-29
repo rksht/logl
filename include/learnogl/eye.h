@@ -176,9 +176,9 @@ struct Camera {
     void
     set_orthogonal_axes(const fo::Vector3 &target_pos, const fo::Vector3 &current_pos, const fo::Vector3 &up);
 
-    // The `up` direction is calculated by crossing new forward vector and old forward vector. Use this
-    // function after you have initialized the axes of the camera yourself, or with `set_orthogonal_axes`.
-    void look_at(const fo::Vector3 &target_pos, const fo::Vector3 &current_pos);
+    // Use this to look at given target position. The up vector (the camera's local y axis) also needs to be
+    // specified.
+    void look_at(const fo::Vector3 &target_pos, const fo::Vector3 &current_pos, const fo::Vector3 &up_vector);
 
     void update_view_transform() { eye::update_view_transform(_eye, _view_xform); }
 };
