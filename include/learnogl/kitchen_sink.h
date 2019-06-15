@@ -938,3 +938,9 @@ template <typename T, size_t full_capacity> struct StaticVector : std::array<T, 
     auto begin() const { return Base::begin(); }
     auto end() const { return Base::begin() + _current_count; }
 };
+
+struct Str {
+    virtual ~Str() {}
+
+    virtual const char *str() const = 0;
+};

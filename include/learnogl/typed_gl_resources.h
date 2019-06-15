@@ -549,7 +549,7 @@ struct AttachmentAndClearValue {
     static i32 color_attachment(i32 color_attachment_number) { return color_attachment_number; }
 };
 
-struct NewFBO {
+struct NewFBO : Str {
     FboPerAttachmentDim _dims;
 
     std::array<GLResource64, MAX_FRAGMENT_OUTPUTS> _color_textures = {};
@@ -567,6 +567,8 @@ struct NewFBO {
 
     // Internal boolean. True if this denotes default framebuffer.
     bool _is_default_fbo = false;
+
+    const char *_debug_label = "";
 
     static constexpr i32 CLEAR_DEPTH = -1;
 
@@ -588,6 +590,8 @@ struct NewFBO {
     }
 
     bool has_depth_texture() const { return GLResource64_RMID_Mask::extract(_depth_texture) != 0; }
+
+    virtual const char *str() const { return _debug_label; }
 };
 
 struct RenderManager : NonCopyable {
@@ -640,7 +644,6 @@ struct RenderManager : NonCopyable {
 
     // All the currently allocated FBOs.
     fo::Vector<NewFBO> _fbos{ _allocator };
-    fo::Vector<FBO> _fbos_with_glhandle{ _allocator };
 
     // Storing linked shaders as a GLResource64. Can get the rmid if we want. User-side doesn't need it.
     fo::PodHash<ShaderProgramKey, GLResource64, decltype(&ShaderProgramKey::hash)> _linked_shaders =

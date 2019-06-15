@@ -44,10 +44,15 @@
 #    define XYZW(v) v.x, v.y, v.z, v.w
 #endif
 
+#if !defined(MAT4_XYZT)
+#    define MAT4_XYZT(m) XYZW(m.x), XYZW(m.y), XYZW(m.z), XYZW(m.t)
+#endif
+
 // Vector2/3/4 format string for using with printf. `n` is the number of significands to show after decimal.
 #define VEC2_FMT(n) "[%." #n "f, %." #n "f]"
 #define VEC3_FMT(n) "[%." #n "f, %." #n "f, %." #n "f]"
 #define VEC4_FMT(n) "[%." #n "f, %." #n "f, %." #n "f, %." #n "f]"
+#define MAT4_FMT(n) "mat4{x=" VEC4_FMT(n) ", y=" VEC4_FMT(n) ", z=" VEC4_FMT(n) ", t=" VEC4_FMT(n) "}"
 
 void invert4x4(const fo::Matrix4x4 *src, fo::Matrix4x4 *dest);
 
@@ -556,6 +561,10 @@ struct OrthoRange {
     operator fo::Vector2() { return fo::Vector2(min, max); }
 
     OrthoRange reverse() const { return OrthoRange(max, min); }
+
+    OrthoRange negated() const { return OrthoRange(-min, -max); }
+
+    float length() const { return std::abs(min - max); }
 };
 
 /// Orthographic projections are the same as applying a non-uniform scale, and then shifting. This function

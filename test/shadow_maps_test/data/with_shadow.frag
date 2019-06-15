@@ -3,6 +3,7 @@
 // Shader takes the albedo from a uniform block, not a texture.
 
 #include "common_defs.inc.glsl"
+#include "definitions.inc.glsl"
 
 in VsOut
 {
@@ -13,41 +14,30 @@ in VsOut
 }
 fs_in;
 
-vec4 get_diffuse_color() { return vec4(0.95, 0.20, 0.50, 1.0); }
-
-// The shadow transform takes a position in world space to clip space from the point of view of casting light.
-uniform mat4 shadow_xform;
+struct BoundingSphere {
+    vec3 position;
+    float radius;
+};
 
 layout(binding = 1) uniform sampler2DShadow comparing_sampler;
 
-struct CookTorranceMaterial {
-    vec4 cdiff;
-};
-
-struct Material {
-    vec4 diffuse_albedo;
-    vec3 fresnel_R0;
-    float shininess;
-};
-
-struct DirLight {
-    vec3 position;
-    vec3 direction;
-    vec3 ambient;
-    vec3 diffuse;
-    vec3 specular;
-};
+DEFINE_CAMERA_UBLOCK(0, ublock_EyeBlock);
 
 layout(binding = 1, std140) uniform ublock_PerObject
 {
     mat4 world_from_local_xform;
     mat4 inv_world_from_local_xform;
-    Material object_material;
+    Material object_material; // Only using the material field
 };
 
 layout(binding = 2, std140) uniform DirLightsList { DirLight dir_lights[NUM_DIR_LIGHTS]; };
 
-DEFINE_CAMERA_UBLOCK(0, ublock_EyeBlock);
+// The shadow transform takes a position in world space to clip space from the point of view of casting light.
+layout(binding = 3, std140) uniform ShadowRelated
+{
+    mat4 shadow_xform;
+    BoundingSphere scene_bs;
+};
 
 out vec4 fc;
 
@@ -135,29 +125,35 @@ float calc_lit_factor()
 
 void main()
 {
-    vec4 diffuse_color = get_diffuse_color();
-
-    // fc = diffuse_color;
-    vec3 frag_color = vec3(0.0, 0.0, 0.0);
-
-    vec3 normal_w = normalize(fs_in.normal_w);
-
     Material mat = object_material;
+    mat.diffuse_albedo = vec4(0.99, 0.90, 0.99, 1.0);
+
+    vec3 frag_color = vec3(0.0, 0.0, 0.0);
+    vec3 normal_w = normalize(fs_in.normal_w);
 
     float lit_factor[NUM_DIR_LIGHTS];
 
-    for (int i = 0; i < NUM_DIR_LIGHTS; ++i)
+#pragma unroll
+    for (int i = 0; i < NUM_DIR_LIGHTS; ++i) {
         lit_factor[i] = 1.0;
-}
+    }
 
-// Only the first light casts shadow. Calculate the lit factor.
-lit_factor[0] = calc_lit_factor();
+    // Only the first light casts shadow. Calculate the lit factor.
 
-for (int i = 0; i < NUM_DIR_LIGHTS; ++i) {
-    DirLight l = dir_lights[i];
-    frag_color +=
-      calc_dir_light_contrib(l, mat, normal_w, normalize(u_camPosition - fs_in.pos_w)) * lit_factor[i];
-}
+    lit_factor[0] = calc_lit_factor();
 
-fc = vec4(frag_color, diffuse_color.a);
+#pragma unroll
+    for (int i = 0; i < NUM_DIR_LIGHTS; ++i) {
+        DirLight l = dir_lights[i];
+#if 0
+        frag_color += calc_dir_light_contrib(l, mat, normal_w, normalize(u_camPosition.xyz - fs_in.pos_w)) *
+          lit_factor[i];
+
+#else
+        frag_color += vec3(1) * lit_factor[i];
+#endif
+    }
+
+    frag_color.xyz = filmic_tonemap(frag_color.xyz * 2.0);
+    fc = vec4(frag_color, mat.diffuse_albedo.a);
 }

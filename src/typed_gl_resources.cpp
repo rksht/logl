@@ -6,6 +6,8 @@
 
 #include <scaffold/ordered_map.h>
 
+#include <learnogl/callstack.h>
+
 #include <thread> // call_once
 
 namespace eng {
@@ -995,6 +997,8 @@ FboId create_fbo(RenderManager &self,
 
     NewFBO new_fbo;
 
+    new_fbo._debug_label = debug_label;
+
     fo::TempAllocator256 ta;
     fo::Array<const TextureInfo *> texture_infos(ta);
 
@@ -1028,6 +1032,7 @@ FboId create_fbo(RenderManager &self,
 
         GLResource64 res64 = lookup.keyvalue().second();
         GLuint gl_handle = GLResource64_GLuint_Mask::extract(res64);
+        LOG_F(INFO, "Adding depth attachment - %u", gl_handle);
         fbo_with_glhandle.add_depth_attachment(gl_handle);
 
         new_fbo._depth_texture = res64;
@@ -1058,11 +1063,17 @@ FboId create_fbo(RenderManager &self,
         attachment_info.internal_type = texture_info->internal_type;
     }
 
-    fo::push_back(self._fbos, new_fbo);
-
     for (const_ &a : clear_attachments) {
+        LOG_F(INFO, "Adding clear attachment [%i], " VEC4_FMT(2), a.attachment, XYZW(a.clear_value));
+
         new_fbo.clear_attachment_after_bind(a.attachment, a.clear_value);
     }
+
+    for (size_t i = 0; i < new_fbo._attachments_to_clear.filled_size(); ++i) {
+        const_ &a = new_fbo._attachments_to_clear[i];
+    }
+
+    fo::push_back(self._fbos, new_fbo);
 
     return FboId{ (u16)(fo::size(self._fbos) - 1) };
 }
@@ -1073,11 +1084,15 @@ void bind_destination_fbo(eng::RenderManager &rm,
     const NewFBO &fbo = rm._fbos[fbo_id._id];
 
     LOCAL_FUNC clear_attachments = [&fbo]() {
-        // TODO: Check if this attachment is actually bound as a draw buffer. Otherwise this can fail. Not too
-        // important though.
-
         for (u32 i = 0; i < fbo._attachments_to_clear.filled_size(); ++i) {
             const_ &a = fbo._attachments_to_clear[i];
+
+            ONCE_BLOCK({
+                if (a.attachment == -1 && !fbo._is_default_fbo) {
+                    LOG_F(INFO, "Clearing depth attachment to value " VEC4_FMT(2), XYZW(a.clear_value));
+                }
+            })
+
             glClearBufferfv(a.attachment == -1 ? GL_DEPTH : GL_COLOR,
                             a.attachment == -1 ? 0 : a.attachment,
                             reinterpret_cast<const GLfloat *>(&a.clear_value));
@@ -1116,6 +1131,7 @@ void bind_destination_fbo(eng::RenderManager &rm,
 
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, GLResource64_GLuint_Mask::extract(fbo._fbo_id64));
     glDrawBuffers(MAX_FRAGMENT_OUTPUTS, gl_attachment_numbers.data());
+    clear_attachments();
 }
 
 void bind_source_fbo(eng::RenderManager &rm, FboId fbo_id, i32 attachment_number) {

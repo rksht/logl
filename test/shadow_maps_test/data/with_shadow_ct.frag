@@ -149,13 +149,7 @@ bool color_if_outside_scene(vec4 diffuse_albedo)
 void main()
 {
     Material mat = object_material;
-
-#if 0
-    if (color_if_outside_scene(mat.diffuse_albedo)) {
-        return;
-    }
-
-#endif
+    mat.diffuse_albedo = vec4(0.99, 0.90, 0.99, 1.0);
 
     vec3 frag_color = vec3(0.0, 0.0, 0.0);
     vec3 normal_w = normalize(fs_in.normal_w);
@@ -174,8 +168,13 @@ void main()
 #pragma unroll
     for (int i = 0; i < NUM_DIR_LIGHTS; ++i) {
         DirLight l = dir_lights[i];
+#if 0
         frag_color += calc_dir_light_contrib(l, mat, normal_w, normalize(u_camPosition.xyz - fs_in.pos_w)) *
           lit_factor[i];
+
+#else
+        frag_color += vec3(1) * lit_factor[i];
+#endif
     }
 
     frag_color.xyz = filmic_tonemap(frag_color.xyz * 2.0);

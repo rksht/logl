@@ -255,6 +255,11 @@ void start_gl(const StartGLParams &params, GLApp &gl_app) {
 
     LOG_F(INFO, "Starting OpenGL...");
     CHECK_F(glfwInit() != 0, "Failed to init GLFW");
+    if (params.msaa_samples == 0) {
+      LOG_F(INFO, "Disabling multisampling");
+    }  else {
+      LOG_F(INFO, "Enabling multisampling");
+    }
     glfwWindowHint(GLFW_SAMPLES, (int)params.msaa_samples);
 
     glfwWindowHint(GLFW_DOUBLEBUFFER, params.double_buffer_enabled ? 1 : 0);

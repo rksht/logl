@@ -8,8 +8,7 @@ using namespace fo;
 Error::Error(const char *error_string)
     : _ss(fo::default_scratch_allocator()) {
     if (error_string && strlen(error_string) == 0) {
-        ABORT_F("Empty message given as error string. Just default initialize instead if you want to denote "
-                "no error");
+        ABORT_F("Empty message given empty string. If you want to denote no error just default initialize");
     }
 
     string_stream::printf(_ss, "%s", error_string);

@@ -62,3 +62,7 @@ target_link_libraries(stams_simple_fluid learnogl)
 
 add_executable(raycast raycast.cpp)
 target_link_libraries(raycast learnogl)
+
+
+add_executable(once_block_test once_block_test.cpp)
+target_link_libraries(once_block_test learnogl)

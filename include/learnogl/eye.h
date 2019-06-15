@@ -177,8 +177,11 @@ struct Camera {
     set_orthogonal_axes(const fo::Vector3 &target_pos, const fo::Vector3 &current_pos, const fo::Vector3 &up);
 
     // Use this to look at given target position. The up vector (the camera's local y axis) also needs to be
-    // specified.
-    void look_at(const fo::Vector3 &target_pos, const fo::Vector3 &current_pos, const fo::Vector3 &up_vector);
+    // specified. Should be a unit vector.
+    void look_at(const fo::Vector3 &target_pos,
+                 const fo::Vector3 &current_pos,
+                 const fo::Vector3 &up_vector,
+                 bool orthogonalize_up = true);
 
     void update_view_transform() { eye::update_view_transform(_eye, _view_xform); }
 };
