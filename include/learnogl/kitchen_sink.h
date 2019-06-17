@@ -580,10 +580,10 @@ template <typename Cleanup> inline Defer<Cleanup> make_deferred(Cleanup dtor_fun
 
 // Convenience macro. Execute a block of code in a function only once (per thread). No thread safety.
 #define ONCE_BLOCK(...)                                                                                      \
-    static bool TOKENPASTE(_did_call_, __LINE__) = false;                                                    \
-    if (!TOKENPASTE(_did_call_, __LINE__)) {                                                                 \
-        TOKENPASTE(_did_call_, __LINE__) = true;                                                             \
-        [&]() __VA_ARGS__();                                                                                  \
+    static bool TOKENPASTE2(_did_call_, __LINE__) = false;                                                   \
+    if (!TOKENPASTE2(_did_call_, __LINE__)) {                                                                \
+        TOKENPASTE2(_did_call_, __LINE__) = true;                                                            \
+        [&]() __VA_ARGS__();                                                                                 \
     }
 
 // end is exclusive.

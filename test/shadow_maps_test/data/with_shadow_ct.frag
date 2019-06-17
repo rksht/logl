@@ -30,13 +30,14 @@ layout(binding = 1, std140) uniform ublock_PerObject
     Material object_material; // Only using the material field
 };
 
-layout(binding = 2, std140) uniform DirLightsList { DirLight dir_lights[NUM_DIR_LIGHTS]; };
+layout(binding = 2, std140) uniform DirLightsList {
+    DirLight dir_lights[NUM_DIR_LIGHTS];
+};
 
 // The shadow transform takes a position in world space to clip space from the point of view of casting light.
 layout(binding = 3, std140) uniform ShadowRelated
 {
     mat4 shadow_xform;
-    BoundingSphere scene_bs;
 };
 
 out vec4 fc;
@@ -105,7 +106,8 @@ float calc_lit_factor()
     const vec2 offsets[9] = { vec2(-dx, dx), vec2(0.0, dx),  vec2(dx, dx),    vec2(-dx, 0.0), vec2(0.0f, 0.0),
                               vec2(dx, 0.0), vec2(-dx, -dx), vec2(0.0f, -dx), vec2(dx, -dx) };
 
-    // We have w = 1, so there is no effect. Can use `textureProj` I think
+    // We have w = 1 since light projection was an orthogonal projection, so there is no effect.
+    // Can use `textureProj` I think
     const vec4 pos_wrt_clip = shadow_xform * vec4(fs_in.pos_w, 1.0);
     const vec4 pos_wrt_ndc = pos_wrt_clip / pos_wrt_clip.w;
 
@@ -137,6 +139,7 @@ float distance_sq(vec3 a, vec3 b)
     return dot(d, d);
 }
 
+#if 0
 bool color_if_outside_scene(vec4 diffuse_albedo)
 {
     if (distance_sq(fs_in.pos_w, scene_bs.position) >= scene_bs.radius * scene_bs.radius) {
@@ -145,6 +148,8 @@ bool color_if_outside_scene(vec4 diffuse_albedo)
     }
     return false;
 }
+
+#endif
 
 void main()
 {
@@ -168,7 +173,7 @@ void main()
 #pragma unroll
     for (int i = 0; i < NUM_DIR_LIGHTS; ++i) {
         DirLight l = dir_lights[i];
-#if 0
+#if 1
         frag_color += calc_dir_light_contrib(l, mat, normal_w, normalize(u_camPosition.xyz - fs_in.pos_w)) *
           lit_factor[i];
 
@@ -177,6 +182,6 @@ void main()
 #endif
     }
 
-    frag_color.xyz = filmic_tonemap(frag_color.xyz * 2.0);
+    // frag_color.xyz = filmic_tonemap(frag_color.xyz * 2.0);
     fc = vec4(frag_color, mat.diffuse_albedo.a);
 }

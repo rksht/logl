@@ -85,10 +85,6 @@ vec3 calc_dir_light_contrib(DirLight L, Material mat, vec3 normal, vec3 to_eye)
     return blinn_phong_shade(lightStrength, lightVec, normal, to_eye, mat);
 }
 
-#ifndef DEPTH_TEXTURE_SIZE
-#define DEPTH_TEXTURE_SIZE 1
-#endif
-
 float calc_lit_factor()
 {
     const mat4 to_range_01 =
@@ -145,7 +141,7 @@ void main()
 #pragma unroll
     for (int i = 0; i < NUM_DIR_LIGHTS; ++i) {
         DirLight l = dir_lights[i];
-#if 0
+#if 1
         frag_color += calc_dir_light_contrib(l, mat, normal_w, normalize(u_camPosition.xyz - fs_in.pos_w)) *
           lit_factor[i];
 
@@ -154,6 +150,7 @@ void main()
 #endif
     }
 
-    frag_color.xyz = filmic_tonemap(frag_color.xyz * 2.0);
-    fc = vec4(frag_color, mat.diffuse_albedo.a);
+    // frag_color.xyz = filmic_tonemap(frag_color.xyz * 2.0);
+    fc = vec4(frag_color, 1.0);
+    // fc = vec4(vec3(lit_factor[0]), 1.0);
 }

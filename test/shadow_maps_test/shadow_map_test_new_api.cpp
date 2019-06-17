@@ -130,6 +130,8 @@ namespace shadow_map
                                       z_range,
                                       OrthoRange{ -1.0f, 1.0f });
 
+        m.clip_from_world = m.eye_block.proj * m.eye_block.view;
+
 #if 0
         m.eye_block.proj.x = Vec4{ 2.0f / info.x_extent, 0.f, 0.f, 0.f };
         m.eye_block.proj.y = Vec4{ 0.f, 2.0f / info.y_extent, 0.f, 0.f };
@@ -327,14 +329,13 @@ struct DirLightInfo {
 
 struct ShadowRelatedUniforms {
     Mat4 shadow_xform;
-    BoundingSphere scene_bs;
 };
 
 // Defining the scene objects using 'shapes', then we make a mesh from the basic shape. This is easier to
 // edit in code.
 std::vector<RenderableShape> g_scene_objects = {
     {
-      ShapeSphere{ Vec3{ 0.0f, 0.0f, -10.0f }, 3.0f },
+      ShapeSphere{ Vec3{ 0.0f, 3.5f, -10.0f }, 3.0f },
     },
     {
       ShapeSphere{ Vec3{ 0.0f, 3.2f, 10.0f }, 3.0f },
@@ -656,7 +657,6 @@ void load_shadow_map_programs(App &app)
           link_shader_program(g_rm(), ShadersToUse::from_vs_fs(vs.rmid(), fs.rmid()));
 
         // Sourcing the shadow transform
-        app.shadow_related.scene_bs = app.scene_bounding_sphere;
         app.shadow_related.shadow_xform = shadow_map::clip_from_world_xform(app.shadow_map);
         source_to_uniform_buffer(g_rm(),
                                  app.uniform_buffers.shadow_related,
@@ -833,20 +833,6 @@ void read_bindpoints_from_programs(App &app)
     read_bindpoints_for_program(app.shader_programs.with_shadow, app.with_shadow_bindpoints);
     read_bindpoints_for_program(app.shader_programs.build_depth_map, app.build_depth_map_bindpoints);
     read_bindpoints_for_program(app.shader_programs.without_shadow, app.without_shadow_bindpoints);
-
-#if 0
-    app.shader_defs.add("PER_OBJECT_UBLOCK_BINDING", (int)app.bound_ubos.per_object.binding);
-    app.shader_defs.add("CAMERA_ETC_UBLOCK_BINDING", (int)app.bound_ubos.eye_block.binding);
-    app.shader_defs.add("DIR_LIGHTS_LIST_UBLOCK_BINDING", (int)app.bound_ubos.dir_lights_list.binding);
-    app.shader_defs.add("FLAT_COLOR", 1);
-    app.shader_defs.add("NUM_DIR_LIGHTS", (int)constants::light_count);
-    app.shader_defs.add("DEPTH_TEXTURE_UNIT", (int)app.shadow_map.depth_texture_unit);
-    app.shader_defs.add("STRUCTURED_TEXTURE_BINDING", (int)app.textures.debug_box_texture.binding);
-    app.shader_defs.add("FACE_DEPTH_DIFF_BINDING", (int)app.depth_texture.binding);
-    app.shader_defs.add("SHADOW_RELATED_PARAMS_BINDING", (int)app.bound_ubos.shadow_related.binding);
-    app.shader_defs.add("FP16_HDR_TEXTURE_BINDPOINT", (int)app.fp16_texture_bindpoint);
-    app.shader_defs.add("TONEMAP_PARAMS_BINPOINT", (int)app.bound_ubos.tonemap_params.binding);
-#endif
 }
 
 // -----
@@ -1056,52 +1042,65 @@ void set_up_lights(App &app)
     position_store.reserve(4);
 
     // First quadrant
-    f32 radius = app.scene_bounding_sphere.radius + 20.0f;
+    f32 dist_from_center = app.scene_bounding_sphere.radius + 20.0f;
     f32 ang_y = 70.0f * one_deg_in_rad;
     f32 ang_zx = 45.0f * one_deg_in_rad;
     // f32 ang_y = 80.0f * one_deg_in_rad;
     // f32 ang_zx = 0.0f * one_deg_in_rad;
 
     Vec3 pos = center +
-      Vec3{ radius * std::sin(ang_y) * std::sin(ang_zx),
-            radius * std::cos(ang_y),
-            radius * std::sin(ang_y) * std::cos(ang_zx) };
+      Vec3{ dist_from_center * std::sin(ang_y) * std::sin(ang_zx),
+            dist_from_center * std::cos(ang_y),
+            dist_from_center * std::sin(ang_y) * std::cos(ang_zx) };
 
     // A convenient light direction for the purpose of this demo is to point at the center of the bounding
     // sphere. Then x_max = r, and x_min = -r. Same for y_max and y_min.
-    g_dir_lights.emplace_back(
-      pos, normalize(center - pos), Vec3(0.0f, 0.0f, 0.0f), Vec3(0.4f, 0.4f, 0.4f), Vec3(0.0f, 0.0f, 0.0f));
+    g_dir_lights.emplace_back(pos,
+                              (center - pos) / dist_from_center,
+                              Vec3(0.0f, 0.0f, 0.0f),
+                              Vec3(0.4f, 0.4f, 0.4f),
+                              Vec3(0.0f, 0.0f, 0.0f));
 
     position_store.push_back(pos);
 
     // Second quadrant
     Mat4 rotation = rotation_about_y(pi / 2.0f);
     pos = Vec3(rotation * Vec4(pos, 1.0f));
-    g_dir_lights.emplace_back(
-      pos, normalize(center - pos), Vec3(0.0f, 0.0f, 0.0f), Vec3(0.9f, 0.9f, 0.9f), Vec3(0.0f, 0.0f, 0.0f));
+    g_dir_lights.emplace_back(pos,
+                              (center - pos) / dist_from_center,
+                              Vec3(0.0f, 0.0f, 0.0f),
+                              Vec3(0.9f, 0.9f, 0.9f),
+                              Vec3(0.0f, 0.0f, 0.0f));
 
     position_store.push_back(pos);
 
     // Third quadrant
     rotation_about_y_update(rotation, 2 * pi / 2.0f);
     pos = Vec3(rotation * Vec4(pos, 1.0f));
-    g_dir_lights.emplace_back(
-      pos, normalize(center - pos), Vec3(0.0f, 0.0f, 0.0f), Vec3(0.2f, 0.2f, 0.2f), Vec3(0.0f, 0.0f, 0.0f));
+    g_dir_lights.emplace_back(pos,
+                              (center - pos) / dist_from_center,
+                              Vec3(0.0f, 0.0f, 0.0f),
+                              Vec3(0.2f, 0.2f, 0.2f),
+                              Vec3(0.0f, 0.0f, 0.0f));
 
     position_store.push_back(pos);
 
     // Fourth quadrant
     rotation_about_y_update(rotation, 3 * pi / 2.0f);
     pos = Vec3(rotation * Vec4(pos, 1.0f));
-    g_dir_lights.emplace_back(
-      pos, normalize(center - pos), Vec3(0.0f, 0.0f, 0.0f), Vec3(0.2f, 0.2f, 0.2f), Vec3(0.0f, 0.0f, 0.0f));
+    g_dir_lights.emplace_back(pos,
+                              (center - pos) / dist_from_center,
+                              Vec3(0.0f, 0.0f, 0.0f),
+                              Vec3(0.2f, 0.2f, 0.2f),
+                              Vec3(0.0f, 0.0f, 0.0f));
 
     position_store.push_back(pos);
 
-    CHECK_F(constants::light_count == g_dir_lights.size(),
-            "constants::light_count = %u, g_dir_lights.size() = %zu",
-            constants::light_count,
-            g_dir_lights.size());
+    CHECK_EQ_F(constants::light_count,
+               g_dir_lights.size(),
+               "constants::light_count = %u, g_dir_lights.size() = %zu",
+               constants::light_count,
+               g_dir_lights.size());
 
 // For each light, insert a cube renderable
 //
@@ -1169,7 +1168,7 @@ void init_render_states(App &app)
     var_ rs = eng::default_rasterizer_state_desc;
     // rs.slope_scaled_depth_bias = 3.0f;
     // rs.constant_deph_bias = 4;
-    rs.cull_side = GL_NONE;
+    rs.cull_side = GL_BACK;
 
     app.rasterizer_states.first_pass = eng::create_rs_state(eng::g_rm(), rs);
     app.rasterizer_states.second_pass = app.rasterizer_states.first_pass;
@@ -1409,6 +1408,9 @@ void blit_depth_map_to_screen(App &app)
     glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
+const_ bindpoint_DirLightsList = 2;
+const_ bindpoint_ShadowRelated = 3;
+
 // Renders the objects along with shadows.
 void render_second_pass(App &app)
 {
@@ -1430,10 +1432,17 @@ void render_second_pass(App &app)
 
     glViewport(0, 0, constants::window_width, constants::window_height);
 
+    // Only difference with render_without_shadow is that we use the other shader program. Factor this
+    // out?
+    eng::set_program(eng::g_rm(), app.shader_programs.with_shadow);
+
     // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     app.shadow_related.shadow_xform = app.shadow_map.clip_from_world;
-    app.shadow_related.scene_bs = app.scene_bounding_sphere;
+
+    ONCE_BLOCK({
+        LOG_F(INFO, "shadow_related.shadow_xform = " MAT4_FMT(2), MAT4_XYZT(app.shadow_related.shadow_xform));
+    })
 
     const_ shadow_related_gluint = eng::gluint_from_globjecthandle(app.uniform_buffers.shadow_related);
 
@@ -1443,22 +1452,31 @@ void render_second_pass(App &app)
       eng::SourceToBufferInfo::after_discard(reinterpret_cast<const void *>(&app.shadow_related), 0));
 
     glBindBuffer(GL_UNIFORM_BUFFER, shadow_related_gluint);
+    glBindBufferRange(GL_UNIFORM_BUFFER,
+                      // app.with_shadow_bindpoints.uniform_blocks["ShadowRelated"],
+                      bindpoint_ShadowRelated,
+                      shadow_related_gluint,
+                      0,
+                      sizeof(ShadowRelatedUniforms));
 
     // Source the main camera's eye block.
     source_eye_block_uniform(app, app.eye_block);
 
+    const_ camera_transform_gluint = eng::gluint_from_globjecthandle(app.uniform_buffers.camera_ubo);
+    glBindBuffer(GL_UNIFORM_BUFFER, camera_transform_gluint);
+    glBindBufferRange(GL_UNIFORM_BUFFER,
+                      app.with_shadow_bindpoints.uniform_blocks.at("ublock_EyeBlock"),
+                      camera_transform_gluint,
+                      0,
+                      sizeof(eng::CameraTransformUB));
+
     {
-        // Only difference with render_without_shadow is that we use the other shader program. Factor this
-        // out?
-        eng::set_program(eng::g_rm(), app.shader_programs.with_shadow);
 
-        glBindBuffer(GL_UNIFORM_BUFFER, shadow_related_gluint);
-
-        glBindBufferRange(GL_UNIFORM_BUFFER,
-                          app.with_shadow_bindpoints.uniform_blocks.at("ShadowRelated"),
-                          shadow_related_gluint,
-                          0,
-                          sizeof(ShadowRelatedUniforms));
+        ONCE_BLOCK({
+            LOG_F(INFO,
+                  "uniform_blocks.at('ShadowRelated) = %i",
+                  app.with_shadow_bindpoints.uniform_blocks.at("ShadowRelated"));
+        })
 
         shadow_map::bind_comparing_sampler(
           app.shadow_map, app.with_shadow_bindpoints.sampled_textures.at("comparing_sampler"));
@@ -1474,9 +1492,16 @@ void render_second_pass(App &app)
 
         const_ dir_lights_gluint = eng::gluint_from_globjecthandle(app.uniform_buffers.dir_lights_list);
 
+        ONCE_BLOCK({
+            LOG_F(INFO,
+                  "with_shadow_bindpoints.uniform_blocks.at('DirLightsList') = %i",
+                  app.with_shadow_bindpoints.uniform_blocks.at("DirLightsList"));
+        })
+
         glBindBuffer(GL_UNIFORM_BUFFER, dir_lights_gluint);
         glBindBufferRange(GL_UNIFORM_BUFFER,
-                          app.with_shadow_bindpoints.uniform_blocks.at("DirLightsList"),
+                          // app.with_shadow_bindpoints.uniform_blocks.at("DirLightsList"),
+                          bindpoint_DirLightsList,
                           dir_lights_gluint,
                           0,
                           vec_bytes(g_dir_lights));
