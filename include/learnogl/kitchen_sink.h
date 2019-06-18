@@ -80,6 +80,7 @@ namespace fo_ss = fo::string_stream;
 #define CTOR_INIT_FIELD(field_name, ...) field_name(__VA_ARGS__)
 #define DEFAULT(v) (v{})
 #define SELF (*this)
+#define self_ (*this)
 #define UNUSED(v) (static_cast<void>(v))
 #define REINPCAST(t, ...) reinterpret_cast<t>(__VA_ARGS__)
 #define CALL_OPERATOR operator()
@@ -608,39 +609,8 @@ template <uint32_t start, typename ConstantType, ConstantType... constants> stru
     }
 };
 
-#if 0
-
-#    if __cplusplus < 201703L
-
-template <typename... StructsWithStaticBool> struct Disjunction { static constexpr bool value = false; };
-
-template <typename First, typename... Rest>
-struct Disjunction<std::enable_if_t<First::template value, First>, Rest...> {
-    static constexpr bool value = true;
-};
-
-template <typename First, typename... Rest>
-struct Disjunction<std::enable_if_t<!First::template value, First>, Rest...> {
-    static constexpr bool value = Disjunction<Rest...>::value;
-};
-
-template <typename... StructsWithStaticBool> struct Conjunction { static constexpr bool value = false; };
-
-template <typename First> struct Conjunction<First> { static constexpr bool value = First::value; };
-
-template <typename First, typename... Rest>
-struct Conjunction<std::enable_if_t<First::template value, First>, Rest...> {
-    static constexpr bool value = Conjunction<Rest...>::value;
-};
-
-#    else
-
-template <typename... T> using Disjunction = std::disjunction<T...>;
-template <typename... T> using Conjunction = std::conjunction<T...>;
-
-#    endif
-
-#endif
+// Since C++20.
+template <class T> struct remove_cvref { typedef std::remove_cv_t<std::remove_reference_t<T>> type; };
 
 template <typename T, typename... TypeList> struct OneOfType {
     static constexpr bool value = std::disjunction_v<std::is_same<T, TypeList>...>;
@@ -944,3 +914,5 @@ struct Str {
 
     virtual const char *str() const = 0;
 };
+
+template <typename
