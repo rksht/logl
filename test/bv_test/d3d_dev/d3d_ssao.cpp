@@ -845,7 +845,7 @@ namespace app_loop
 
 	static void render_with_ssao(SSAODemo &app)
 	{
-		LOCAL_FUNC set_full_screen_triangle_vb_ib = []() {
+		fn_ set_full_screen_triangle_vb_ib = []() {
 			d3d11_misc::context()->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
 			d3d11_misc::context()->IASetIndexBuffer(nullptr, DXGI_FORMAT(0), 0);
 			d3d11_misc::context()->IASetInputLayout(nullptr);

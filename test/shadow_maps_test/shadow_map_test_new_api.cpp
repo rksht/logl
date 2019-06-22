@@ -797,7 +797,7 @@ void init_shader_defs(App &app)
 void read_bindpoints_from_programs(App &app)
 {
     // Get the bindpoint of resources from shader.
-    LOCAL_FUNC read_bindpoints_for_program = [&](const eng::ShaderProgramHandle &shader_program,
+    fn_ read_bindpoints_for_program = [&](const eng::ShaderProgramHandle &shader_program,
                                                  BindpointsInProgram &bindpoints_out) {
         fo_ss::Buffer shader_sources =
           eng::get_shaders_used_by_program(eng::g_rm(), shader_program).source_paths_as_string(eng::g_rm());
@@ -1453,8 +1453,8 @@ void render_second_pass(App &app)
 
     glBindBuffer(GL_UNIFORM_BUFFER, shadow_related_gluint);
     glBindBufferRange(GL_UNIFORM_BUFFER,
-                      // app.with_shadow_bindpoints.uniform_blocks["ShadowRelated"],
-                      bindpoint_ShadowRelated,
+                      app.with_shadow_bindpoints.uniform_blocks["ShadowRelated"],
+                      // bindpoint_ShadowRelated,
                       shadow_related_gluint,
                       0,
                       sizeof(ShadowRelatedUniforms));
@@ -1500,8 +1500,8 @@ void render_second_pass(App &app)
 
         glBindBuffer(GL_UNIFORM_BUFFER, dir_lights_gluint);
         glBindBufferRange(GL_UNIFORM_BUFFER,
-                          // app.with_shadow_bindpoints.uniform_blocks.at("DirLightsList"),
-                          bindpoint_DirLightsList,
+                          app.with_shadow_bindpoints.uniform_blocks.at("DirLightsList"),
+                          // bindpoint_DirLightsList,
                           dir_lights_gluint,
                           0,
                           vec_bytes(g_dir_lights));

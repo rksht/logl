@@ -140,7 +140,7 @@ struct GLApp {
     StringTable string_table{ 10, 30 };
     BindingState bs;
     FileMonitor file_monitor;
-    ShapeMeshes shape_meshes;
+    // ShapeMeshes shape_meshes;
     ResourceManager res_man;
     SoundManager sound_man;
     RenderManager render_manager;

@@ -250,11 +250,11 @@ using DstAlphaFactor_Mask = Mask32<12, 4>;
 using BlendOp_Mask = Mask32<16, 4>;
 
 inline u32 compressed_blend_config(const BlendFunctionDesc &conf) {
-    LOCAL_FUNC compress_factor = [](BlendFactor factor) -> u32 {
+    fn_ compress_factor = [](BlendFactor factor) -> u32 {
         return factor == BlendFactor::ZERO ? 0 : factor == BlendFactor::ONE ? 1 : (factor & 0x1) + 2;
     };
 
-    LOCAL_FUNC compress_blend_op = [](BlendOp op) {
+    fn_ compress_blend_op = [](BlendOp op) {
         // See glad.h. The blend ops are of the form 0x80[]. Can extract the last 16 bits and get it.
         return 0xf & op;
     };
@@ -270,14 +270,14 @@ inline u32 compressed_blend_config(const BlendFunctionDesc &conf) {
 }
 
 inline BlendFunctionDesc uncompressed_blend_config(u32 c) {
-    LOCAL_FUNC uncompress_factor = [](u32 compressed_factor) -> BlendFactor {
+    fn_ uncompress_factor = [](u32 compressed_factor) -> BlendFactor {
         GLenum r = compressed_factor == 0
                        ? BlendFactor::ZERO
                        : compressed_factor == 1 ? BlendFactor::ONE : (compressed_factor - 2) | 0x300u;
         return static_cast<BlendFactor>(r);
     };
 
-    LOCAL_FUNC uncompressed_blend_op = [](u32 compressed_op) -> BlendOp {
+    fn_ uncompressed_blend_op = [](u32 compressed_op) -> BlendOp {
         return static_cast<BlendOp>(0x800u | compressed_op);
     };
 

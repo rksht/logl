@@ -194,7 +194,7 @@ shaderc_include_result *ShaderIncluderInterface::GetInclude(const char *requeste
         search_in_cur_dir = false;
     }
 
-    LOCAL_FUNC get_include = [&](const fs::path &path_to_source) {
+    fn_ get_include = [&](const fs::path &path_to_source) {
         std::string path_str = path_to_source.generic_u8string();
 
         // Copy source path
@@ -533,7 +533,7 @@ GLuint compile_preprocessed_shader(const char *shader_cstr, ShaderKind shader_ki
 }
 
 static void remove_unwanted_directives(std::string &pp_string) {
-    LOCAL_FUNC remove_match_region = [&](std::smatch &m, int group) {
+    fn_ remove_match_region = [&](std::smatch &m, int group) {
         size_t start = m.position(group);
         size_t end = m.position(group) + m.length(group);
         std::fill(pp_string.begin() + start, pp_string.begin() + end, ' ');
@@ -665,7 +665,7 @@ GLuint create_vsfs_shader_object(ShaderSourceType shader_source,
                                  ShaderKind shader_kind,
                                  ShaderDefines &macro_defs,
                                  const char *debug_label) {
-    LOCAL_FUNC remove_and_add = [&](const char *macro_to_remove, const char *macro_to_add) {
+    fn_ remove_and_add = [&](const char *macro_to_remove, const char *macro_to_add) {
         FindWithEnd f = find_with_end(macro_defs._definitions, std::string(macro_to_remove));
         if (f.found()) {
             macro_defs._definitions.erase(f.res_it);

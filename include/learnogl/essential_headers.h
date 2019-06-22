@@ -34,12 +34,11 @@
 #include <scaffold/types.h>
 
 #include <learnogl/callstack.h>
-#include <learnogl/kitchen_sink.h>
 #include <learnogl/type_utils.h>
-
-#include <learnogl/error.h>
 
 #include <learnogl/debug_break.h>
 
-reallyconst LOGL_MILD_LOG_CHANNEL = loguru::NamedVerbosity::Verbosity_1;
-reallyconst LOGL_ERROR_LOG_CHANNEL = loguru::NamedVerbosity::Verbosity_ERROR;
+#include <learnogl/kitchen_sink.h>
+
+static constexpr auto LOGL_MILD_LOG_CHANNEL = loguru::NamedVerbosity::Verbosity_1;
+static constexpr auto LOGL_ERROR_LOG_CHANNEL = loguru::NamedVerbosity::Verbosity_ERROR;

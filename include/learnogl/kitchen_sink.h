@@ -65,11 +65,9 @@ constexpr u64 MICROSECONDS_NS = MILLISECONDS_NS / 1000;
 namespace fo_ss = fo::string_stream;
 
 /// Why not
-#define FUNC auto
-#define LOCAL_FUNC const auto
-#define LET const auto
+#define fn_ auto
+#define local_fn_ const auto
 #define LETREF const auto &
-#define VAR auto
 #define TU_LOCAL static
 #define GLOBAL_LAMBDA []
 #define const_ const auto
@@ -804,6 +802,8 @@ template <typename T> struct NulledOnDtorPtr {
 
     T *operator->() { return _p; }
 
+    T *operator->() const { return _p; }
+
     operator bool() const { return _p != nullptr; }
 };
 
@@ -914,5 +914,3 @@ struct Str {
 
     virtual const char *str() const = 0;
 };
-
-template <typename

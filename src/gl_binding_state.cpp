@@ -565,11 +565,11 @@ void BindingState::save_bindings(SavedBindingsHeader *saved, u32 allocated_bytes
 
     const u8 *end = cursor + saved->data_block_size;
 
-    LOCAL_FUNC have_space = [&](u32 allocated_bytes) { return end - cursor >= allocated_bytes; };
+    fn_ have_space = [&](u32 allocated_bytes) { return end - cursor >= allocated_bytes; };
 
     u16 count = 0;
 
-    LOCAL_FUNC store_ubo_bindpoints = [&](GLuint bindpoint, const gl_desc::UniformBuffer &ubo_range) {
+    fn_ store_ubo_bindpoints = [&](GLuint bindpoint, const gl_desc::UniformBuffer &ubo_range) {
         if (have_space(sizeof(BoundUBO))) {
             BoundUBO binding(bindpoint, ubo_range);
             memcpy(cursor, &binding, sizeof(binding));
@@ -582,7 +582,7 @@ void BindingState::save_bindings(SavedBindingsHeader *saved, u32 allocated_bytes
 
     // @rksht : SSBO and UBO are handled exactly the same way. Just have a single "ShaderAccessBuffer"
     // description for both instead of this redundancy.
-    LOCAL_FUNC store_ssbo_bindpoints = [&](GLuint bindpoint, const gl_desc::ShaderStorageBuffer &ssbo_range) {
+    fn_ store_ssbo_bindpoints = [&](GLuint bindpoint, const gl_desc::ShaderStorageBuffer &ssbo_range) {
         if (have_space(sizeof(BoundSSBO))) {
             BoundSSBO binding(bindpoint, ssbo_range);
             memcpy(cursor, &binding, sizeof(binding));
@@ -593,7 +593,7 @@ void BindingState::save_bindings(SavedBindingsHeader *saved, u32 allocated_bytes
         return false;
     };
 
-    LOCAL_FUNC store_texture_bindpoints = [&](GLuint bindpoint, const gl_desc::SampledTexture &texture) {
+    fn_ store_texture_bindpoints = [&](GLuint bindpoint, const gl_desc::SampledTexture &texture) {
         if (have_space(sizeof(BoundTexture))) {
             BoundTexture binding(bindpoint, texture);
             memcpy(cursor, &binding, sizeof(binding));

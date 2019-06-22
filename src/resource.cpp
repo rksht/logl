@@ -17,7 +17,7 @@ static ResourceKind::E get_resource_kind_from_ext(const char *ext) {
 fs::path get_path_to_resource(const ResourceManager &self, const char *relative_path_to_resource) {
     fs::path fullpath;
 
-    for (LET &root : self._resource_roots) {
+    for (var_ &root : self._resource_roots) {
         auto p = root / relative_path_to_resource;
         if (fs::exists(p)) {
             fullpath = std::move(p);
@@ -43,7 +43,7 @@ bool load_resource(ResourceManager &self,
         return false;
     }
 
-    LET ext = fullpath.extension();
+    var_ ext = fullpath.extension();
 
     auto u8string = ext.generic_u8string();
 
@@ -58,7 +58,9 @@ bool load_resource(ResourceManager &self,
     const char *fail_reason = nullptr;
 
     switch (resource_kind) {
-    default: { fail_reason = "Unimplemented loader"; } break;
+    default: {
+        fail_reason = "Unimplemented loader";
+    } break;
 
     case ResourceKind::INVALID: {
         fail_reason = "Unrecognized extension";

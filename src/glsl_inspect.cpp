@@ -649,8 +649,10 @@ void InspectedGLSL::ReflectDataBlocks(GLenum programInterface, pmr::vector<DataB
             info.referencedBy[ST_TESSCONTROL] = *current++;
             info.referencedBy[ST_TESSEVALUATION] = *current++;
 
-            // To be sure the bufferBinding field is set correctly, use this approach.
-            info.bufferBinding = glGetProgramResourceIndex(mHandle, programInterface, info.name.c_str());
+            VLOG_F(LOGL_MILD_LOG_CHANNEL,
+                   "Interface block %s has buffer binding %i",
+                   info.name.c_str(),
+                   info.bufferBinding);
 
             GLint numActiveVariables = *current++;
             if (numActiveVariables > 0) {

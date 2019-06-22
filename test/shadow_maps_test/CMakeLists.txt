@@ -26,13 +26,13 @@ else()
 endif()
 in_tests_folder(shadowmap_test)
 
-add_executable(thick_glass thick_glass.cpp shadow_map.h shadow_map.cpp demo_types.h demo_types.cpp)
+add_executable(diffuse_irradiance_map diffuse_irradiance_map.cpp diffuse_irradiance_map.h)
 if (LOGL_FSANITIZE_MEMORY)
-  target_link_libraries(thick_glass -lasan learnogl)
+  target_link_libraries(diffuse_irradiance_map -lasan learnogl)
 else()
-  target_link_libraries(thick_glass learnogl)
+  target_link_libraries(diffuse_irradiance_map learnogl)
 endif()
-in_tests_folder(thick_glass)
+in_tests_folder(diffuse_irradiance_map)
 
 add_executable(image_based_test image_based_test.cpp shadow_map.h shadow_map.cpp demo_types.h demo_types.cpp imgui_gl3_render.inc.h imgui_glfw_input.inc.h
 				imgui_impl_opengl3.cpp imgui_impl_opengl3.h imgui_impl_glfw.cpp imgui_impl_glfw.h)
@@ -47,3 +47,7 @@ add_executable(shadow_map_test_new_api shadow_map_test_new_api.cpp)
   target_link_libraries(shadow_map_test_new_api learnogl)
 in_tests_folder(shadowmap_test)
 
+
+add_executable(mesh_tangent_gen mesh_tangent_gen.cpp)
+  target_link_libraries(mesh_tangent_gen learnogl)
+in_tests_folder(shadowmap_test)

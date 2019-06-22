@@ -169,7 +169,7 @@ namespace eng
 
         DEFINE_TRIVIAL_PAIR(WeightAndOffset, f64, weight, f64, offset);
 
-        LOCAL_FUNC weight_and_offset = [](f64 gw_i, f64 gw_i1) {
+        fn_ weight_and_offset = [](f64 gw_i, f64 gw_i1) {
             // Solve the two simple equations for w_n and a_n.
             f64 s = gw_i + gw_i1;
             f64 o_i = gw_i1 / s;
@@ -283,7 +283,7 @@ namespace eng
 
         // Create the two programs, one with the vanilla 9 samples, the other with 5 lerped samples.
 
-        LOCAL_FUNC create_blur_program = [&]() {
+        fn_ create_blur_program = [&]() {
             BlurProgram prog;
 
             self.shader_defs.add("DO_VERTEX_SHADER");

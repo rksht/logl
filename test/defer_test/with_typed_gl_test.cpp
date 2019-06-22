@@ -212,7 +212,7 @@ int main_generate_sphere_world(GenerateSceneInfo gen_scene_info)
 	{
 		nfcd_ConfigData *cd = nfcd_make(simple_nf_realloc, nullptr, kilobytes(4), 0);
 
-		LOCAL_FUNC make_vector = [](nfcd_ConfigData **cd, std::initializer_list<f32> floats) -> nfcd_loc {
+		fn_ make_vector = [](nfcd_ConfigData **cd, std::initializer_list<f32> floats) -> nfcd_loc {
 			nfcd_loc array_loc = nfcd_add_array(cd, (int)floats.size());
 			for (float f : floats) {
 				nfcd_push(cd, array_loc, nfcd_add_number(cd, f));

@@ -13,7 +13,7 @@
 #    define GLFW_EXPOSE_NATIVE_GLX
 #    define GLFW_EXPOSE_NATIVE_X11
 
-#    define GLFWAPI __attribute__((visibility("default")))
+// #    define GLFWAPI __attribute__((visibility("default")))
 
 #else
 #    warning "Unknown platform"
@@ -256,9 +256,9 @@ void start_gl(const StartGLParams &params, GLApp &gl_app) {
     LOG_F(INFO, "Starting OpenGL...");
     CHECK_F(glfwInit() != 0, "Failed to init GLFW");
     if (params.msaa_samples == 0) {
-      LOG_F(INFO, "Disabling multisampling");
-    }  else {
-      LOG_F(INFO, "Enabling multisampling");
+        LOG_F(INFO, "Disabling multisampling");
+    } else {
+        LOG_F(INFO, "Enabling multisampling");
     }
     glfwWindowHint(GLFW_SAMPLES, (int)params.msaa_samples);
 
@@ -331,7 +331,7 @@ void start_gl(const StartGLParams &params, GLApp &gl_app) {
     gl_app.bs.init(BindingStateConfig());
 
     // Init the shape meshes
-    init_shape_mesh_struct(gl_app.shape_meshes);
+    // init_shape_mesh_struct(gl_app.shape_meshes);
 
     {
         eng::ShaderGlobalsConfig shaders_config;
@@ -543,7 +543,7 @@ static inline void shift_par_cube(par_shapes_mesh *cube) {
 }
 
 static inline void make_unit_radius_cube(par_shapes_mesh *cube) {
-    LOCAL_FUNC transform = [](float p) { return p * 2.0f - 1.0f; };
+    fn_ transform = [](float p) { return p * 2.0f - 1.0f; };
     for (int i = 0; i < cube->npoints; ++i) {
         cube->points[i * 3] = transform(cube->points[i * 3]);
         cube->points[i * 3 + 1] = transform(cube->points[i * 3 + 1]);
@@ -929,6 +929,7 @@ void load_renderdoc(const char *capture_path_template) {
         INI_STORE_DEFAULT(
             "renderdoc_dll_path", eng::gl().config_ini.string, rdoc_dll_path_str, LOGL_RENDERDOC_DLL_PATH);
         rdoc_dll_path = rdoc_dll_path_str;
+        LOG_F(INFO, "rdoc_dll_path_str =", rdoc_dll_path.c_str());
     }
     auto pathstr = rdoc_dll_path.u8string();
 

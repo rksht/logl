@@ -818,7 +818,7 @@ static GLResource64 link_new_program(RenderManager &self,
         is_compute_program = true;
     }
 
-    LOCAL_FUNC get_gluint = [&](RMResourceID16 rmid) -> GLuint {
+    fn_ get_gluint = [&](RMResourceID16 rmid) -> GLuint {
         auto lookup = find_with_end(self._rmid16_to_res64, rmid);
         if (lookup.not_found()) {
             return 0;
@@ -826,7 +826,7 @@ static GLResource64 link_new_program(RenderManager &self,
         return (GLuint)GLResource64_GLuint_Mask::extract(lookup.keyvalue().second());
     };
 
-    LOCAL_FUNC attach_shader = [&](RMResourceID16 rmid) {
+    fn_ attach_shader = [&](RMResourceID16 rmid) {
         if (rmid != 0) {
             GLuint shader_gluint = get_gluint(rmid);
             CHECK_NE_F(shader_gluint, 0, "rmid '%u' does not point to a live shader object", rmid);
@@ -1083,7 +1083,7 @@ void bind_destination_fbo(eng::RenderManager &rm,
                           const ::StaticVector<i32, MAX_FRAGMENT_OUTPUTS> &attachment_map) {
     const NewFBO &fbo = rm._fbos[fbo_id._id];
 
-    LOCAL_FUNC clear_attachments = [&fbo]() {
+    fn_ clear_attachments = [&fbo]() {
         for (u32 i = 0; i < fbo._attachments_to_clear.filled_size(); ++i) {
             const_ &a = fbo._attachments_to_clear[i];
 

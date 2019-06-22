@@ -4,6 +4,10 @@
 #include <scaffold/non_pods.h>
 #include <scaffold/vector.h>
 
+#include <learnogl/kitchen_sink.h>
+
+#include <ostream>
+
 // A collection of strings in a single buffer. Can only add new strings, cannot remove added strings.
 struct FixedStringBuffer {
     fo::Vector<char> _concat_of_strings;
@@ -43,3 +47,33 @@ struct FixedStringBuffer {
 
     void reserve(u32 num_strings, u32 max_length);
 };
+
+struct FixedString : NonCopyable {
+    FixedString() = default;
+
+    FixedString(FixedStringBuffer &fb, const char *string)
+        : _fb(&fb) {
+        _fb->add(string);
+    }
+
+    FixedString &set(FixedStringBuffer &fb, const char *string) {
+        if (_index._i == 0) {
+            _fb = &fb;
+            _index = _fb->add(string, strlen(string));
+        }
+
+        return self_;
+    }
+
+    const char *get() const { return _fb ? _fb->get(_index) : ""; }
+
+    u32 length() const { return _fb ? _fb->length(_index) : 0; }
+
+  private:
+    NulledOnDtorPtr<FixedStringBuffer> _fb;
+    FixedStringBuffer::Index _index = { 0u };
+};
+
+namespace std {
+inline ostream &operator<<(std::ostream &os, const FixedString &s) { return (os << s.get()); }
+} // namespace std

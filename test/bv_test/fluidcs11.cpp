@@ -455,7 +455,7 @@ void load_shader_programs(Demo &a)
 
 	LOG_F(INFO, "Compiling compute shader with macros defined - \n%s", g_shader_defs.get_string().c_str());
 
-	LOCAL_FUNC create_vsfs_program = [&](const char *file_name) {
+	fn_ create_vsfs_program = [&](const char *file_name) {
 		VSFS_Program p;
 		g_shader_defs.add("DO_VS", 1);
 		p.vs = create_shader_from_big_file(file_name, eng::VERTEX_SHADER, g_shader_defs);
@@ -979,7 +979,7 @@ void init_from_ini(Demo &a)
 #if 0
 void test_vertex_shader(Demo &a) {
 
-    LOCAL_FUNC vs_func = [&](u32 vid) {
+    fn_ vs_func = [&](u32 vid) {
         u32 particle_index = vid / 6;
         u32 vertex_in_quad = vid % 6;
 
@@ -1003,7 +1003,7 @@ void test_vertex_shader(Demo &a) {
         return gl_Position;
     };
 
-    LOCAL_FUNC draw_quad = [&](u32 pid) {
+    fn_ draw_quad = [&](u32 pid) {
         Vector4 quad[6] = {};
 
         for (u32 vid = pid * 6, i = 0; i < 6; ++vid, ++i) {
