@@ -325,7 +325,7 @@ void start_gl(const StartGLParams &params, GLApp &gl_app) {
         dont_load_renderdoc();
     }
 
-    init_sound_manager(gl_app.sound_man, gl_app.window);
+    // init_sound_manager(gl_app.sound_man, gl_app.window);
 
     // Init GL binding state manager
     gl_app.bs.init(BindingStateConfig());
@@ -448,6 +448,11 @@ bool handle_eye_input(GLFWwindow *window, eye::State &e, float dt, fo::Matrix4x4
     }
 
     return moved;
+}
+
+bool handle_camera_input(GLFWwindow *window, eng::Camera &camera, float dt) {
+    handle_eye_input(window, camera._eye, dt, camera._view_xform);
+    camera.set_needs_update(true);
 }
 
 bool handle_eye_input_from_callback(GLFWwindow *window,

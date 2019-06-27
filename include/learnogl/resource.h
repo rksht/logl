@@ -1,3 +1,5 @@
+#if 0
+
 // Do you even need a cache? If your simple as fuck but oh-so-fun game fits in memory, why the fuck do you
 // need to implement an involved resource manager? It will do nothing my act as a tracker of data. It will not
 // work.
@@ -152,3 +154,5 @@ void unload_resource(ResourceManager &c, const char *relative_path_to_resource);
 void unload_every_resource(ResourceManager &c, bool reallocate_memory = false);
 
 } // namespace eng
+
+#endif

@@ -88,7 +88,7 @@ namespace shadow_map
           eng::create_fbo(eng::g_rm(),
                           {},
                           m.recorded_depth_texture.rmid(),
-                          { eng::AttachmentAndClearValue{ eng::NewFBO::CLEAR_DEPTH, Vec4{ 1.0f, 0, 0, 0 } } },
+                          { eng::AttachmentAndClearValue{ eng::depth_attachment(), Vec4{ 1.0f, 0, 0, 0 } } },
                           "fbo@depth_record");
 
         LOG_F(INFO, "recorded_depth_fbo id = %u", m.recorded_depth_fbo);

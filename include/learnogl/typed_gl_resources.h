@@ -9,6 +9,7 @@
 #include <learnogl/fixed_string_buffer.h>
 #include <learnogl/mesh.h>
 #include <learnogl/pmr_compatible_allocs.h>
+#include <learnogl/uniform_structs.h>
 #include <scaffold/arena_allocator.h>
 #include <scaffold/bitflags.h>
 #include <scaffold/open_hash.h>
@@ -386,13 +387,6 @@ struct TextureInfo {
 
 static constexpr uint MAX_FRAMEBUFFER_COLOR_TEXTURES = 8;
 
-struct CameraTransformUB {
-    fo::Matrix4x4 view;             // View <- World
-    fo::Matrix4x4 proj;             // Homegenous clip space <- View
-    fo::Vector4 camera_position;    // Camera position wrt world space
-    fo::Vector4 camera_orientation; // Camera orientation wrt world space
-};
-
 // Use fmt to place a name field
 constexpr const char *camera_transform_ublock_str = R"(
 uniform {} {{
@@ -531,6 +525,7 @@ struct FboPerAttachmentDim {
 
 // Users should create the attachment index from attachment via these functions.
 inline i32 depth_attachment() { return -1; }
+inline i32 stencil_attacgment() { return -2; }
 inline i32 color_attachment(i32 color_attachment_number) { return color_attachment_number; }
 
 // Denotes an attachment and the value it will be cleared with when bound as a destination fbo.
@@ -569,8 +564,6 @@ struct NewFBO : Str {
     bool _is_default_fbo = false;
 
     const char *_debug_label = "";
-
-    static constexpr i32 CLEAR_DEPTH = -1;
 
     // Set given `attachment` to be cleared after being bound as a destination fbo. If attachment is -1,
     // it denotes the depth attachment. Otherwise, it should be positive and denote a color attachment.
@@ -737,14 +730,20 @@ void shutdown_render_manager(RenderManager &self);
 
 struct RasterizerStateId {
     u16 _id;
+
+    operator bool() const { return bool(_id); }
 };
 
 struct DepthStencilStateId {
     u16 _id;
+
+    operator bool() const { return bool(_id); }
 };
 
 struct BlendFunctionDescId {
     u16 _id;
+
+    operator bool() const { return bool(_id); }
 };
 
 // -- Buffer creation functions

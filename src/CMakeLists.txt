@@ -14,7 +14,7 @@ endif()
 set(header_dir ${PROJECT_SOURCE_DIR}/include/learnogl)
 set(header_files_relative
     debug_break.h
-    audio.h
+    # audio.h
     app_loop.h
     bitonic_sort.h
     gl_misc.h
@@ -22,6 +22,7 @@ set(header_files_relative
     start.h
     kitchen_sink.h
     pmr_compatible_allocs.h
+    uniform_structs.h
     gl_binding_state.h
     constexpr_stuff.h
     shader.h
@@ -38,7 +39,7 @@ set(header_files_relative
     nflibs.h
     math_ops.h
     par_shapes.h
-    resource.h
+    # resource.h
     dds_loader.h
     renderdoc_app.h
     gl_timer_query.h
@@ -68,7 +69,7 @@ set(source_files
     callstack.cpp
     gl_binding_state.cpp
     shader.cpp
-    audio.cpp
+    # audio.cpp
     pmr_compatible_allocs.cpp
     bounding_shapes.cpp
     rng.cpp
@@ -79,7 +80,7 @@ set(source_files
     fixed_string_buffer.cpp
     glsl_inspect.cpp
     render_utils.cpp
-    resource.cpp
+    # resource.cpp
     par_shapes.cpp
     kitchen_sink.cpp
     nf_simple.cpp

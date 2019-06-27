@@ -6,6 +6,7 @@
 #include <scaffold/array.h>
 #include <scaffold/debug.h>
 #include <scaffold/memory.h>
+#include <scaffold/ordered_map.h>
 #include <scaffold/pod_hash.h>
 #include <scaffold/string_stream.h>
 #include <scaffold/vector.h>
@@ -72,6 +73,7 @@ namespace fo_ss = fo::string_stream;
 #define GLOBAL_LAMBDA []
 #define const_ const auto
 #define var_ auto
+#define lam_ [&]
 
 #define DONT_KEEP_INLINED inline
 #define FUNC_PTR(function_name) std::add_pointer_t<decltype(function_name)>
@@ -380,6 +382,25 @@ template <typename K, typename V> auto find_with_end(fo::OrderedMap<K, V> &map, 
 
 template <typename K, typename V> auto find_with_end(const fo::OrderedMap<K, V> &map, const K &key) {
     return make_find_with_end(fo::get(map, key), fo::end(map));
+}
+
+// Returns the integer index using std::find.
+template <typename Container, typename ValueToCompareWith>
+auto std_find_index(const Container &container, const ValueToCompareWith &v) {
+    const auto it = std::find(std::begin(container), std::end(container), v);
+    if (it == std::end(container)) {
+        return long(-1);
+    }
+    return it - std::begin(container);
+}
+
+template <typename Container, typename UnaryPredicate>
+auto std_find_if_index(const Container &container, UnaryPredicate pred) {
+    const auto it = std::find_if(std::begin(container), std::end(container), pred);
+    if (it == std::end(container)) {
+        return long(-1);
+    }
+    return it - std::begin(container);
 }
 
 u32 split_string(const char *in,

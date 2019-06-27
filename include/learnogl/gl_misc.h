@@ -141,8 +141,8 @@ struct GLApp {
     BindingState bs;
     FileMonitor file_monitor;
     // ShapeMeshes shape_meshes;
-    ResourceManager res_man;
-    SoundManager sound_man;
+    // ResourceManager res_man;
+    // SoundManager sound_man;
     RenderManager render_manager;
     FBO default_fbo;
 
@@ -155,11 +155,11 @@ struct GLApp {
 /// Returns ref to a global GLApp structure which gets initialized by start_gl by default
 GLApp &gl();
 
-inline ResourceManager &g_res_man() { return gl().res_man; }
+// inline ResourceManager &g_res_man() { return gl().res_man; }
 
 inline BindingState &g_bs() { return gl().bs; }
 
-inline SoundManager &g_sound_man() { return gl().sound_man; }
+// inline SoundManager &g_sound_man() { return gl().sound_man; }
 
 inline StringTable &g_st() { return gl().string_table; }
 
@@ -201,6 +201,8 @@ inline GLuint create_uniform_buffer(size_t size, GLenum usage = GL_DYNAMIC_DRAW)
     glBufferData(GL_UNIFORM_BUFFER, size, nullptr, usage);
     return buffer;
 }
+
+bool handle_camera_input(GLFWwindow *window, eng::Camera &camera, float dt);
 
 bool handle_eye_input(GLFWwindow *window, eye::State &e, float dt, fo::Matrix4x4 &view_mat);
 

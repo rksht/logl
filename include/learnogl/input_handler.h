@@ -101,23 +101,24 @@ template <typename App> struct GLFWCallbacks {
     static void on_key(GLFWwindow *window, int key, int scancode, int action, int mods) {
         auto app = reinterpret_cast<App *>(glfwGetWindowUserPointer(window));
         app->current_input_handler()->handle_on_key(*app,
-                                                    input::OnKeyArgs{key, scancode, action, mods, window});
+                                                    input::OnKeyArgs{ key, scancode, action, mods, window });
     }
 
     static void on_mouse_move(GLFWwindow *window, double xpos, double ypos) {
         auto app = reinterpret_cast<App *>(glfwGetWindowUserPointer(window));
-        app->current_input_handler()->handle_on_mouse_move(*app, input::OnMouseMoveArgs{xpos, ypos, window});
+        app->current_input_handler()->handle_on_mouse_move(*app,
+                                                           input::OnMouseMoveArgs{ xpos, ypos, window });
     }
 
     static void on_mouse_button(GLFWwindow *window, int button, int action, int mods) {
         auto app = reinterpret_cast<App *>(glfwGetWindowUserPointer(window));
         app->current_input_handler()->handle_on_mouse_button(
-            *app, input::OnMouseButtonArgs{button, action, mods, window});
+            *app, input::OnMouseButtonArgs{ button, action, mods, window });
     }
 
     static void on_char_input(GLFWwindow *window, unsigned int codepoint) {
         auto app = reinterpret_cast<App *>(glfwGetWindowUserPointer(window));
-        app->current_input_handler()->handle_on_char_input(*app, input::OnCharInputArgs{codepoint, window});
+        app->current_input_handler()->handle_on_char_input(*app, input::OnCharInputArgs{ codepoint, window });
     }
 };
 
@@ -133,9 +134,9 @@ template <typename App> inline void register_glfw_callbacks(App &app, GLFWwindow
 
 } // namespace eng_internal
 
-#define DEFINE_GLFW_CALLBACKS(AppClassName) template struct eng_internal::GLFWCallbacks<AppClassName>
+#define DEFINE_GLFW_CALLBACKS(AppClassName) template struct ::eng::eng_internal::GLFWCallbacks<AppClassName>
 
 #define REGISTER_GLFW_CALLBACKS(ref_to_app, window_ptr)                                                      \
-    eng_internal::register_glfw_callbacks(ref_to_app, window_ptr)
+    ::eng::eng_internal::register_glfw_callbacks(ref_to_app, window_ptr)
 
 } // namespace eng

@@ -606,6 +606,32 @@ void InspectedGLSL::ReflectUniforms() {
     }
 }
 
+pmr::vector<InspectedGLSL::SamplerUniformInfoWithName> InspectedGLSL::GetSamplers() const {
+    const_ &uniforms = GetUniforms();
+
+    pmr::vector<InspectedGLSL::SamplerUniformInfoWithName> samplerInfos;
+
+    for (const_ &uniform : uniforms) {
+        if (!uniform.optSamplerInfo) {
+            continue;
+        }
+
+        InspectedGLSL::SamplerUniformInfoWithName samplerInfoWithName;
+        InspectedGLSL::SamplerUniformInfo samplerInfo = uniform.optSamplerInfo.value();
+
+        samplerInfoWithName.fullName = uniform.fullName;
+        samplerInfoWithName.is1D = samplerInfo.is1D;
+        samplerInfoWithName.is2D = samplerInfo.is2D;
+        samplerInfoWithName.is3D = samplerInfo.is3D;
+        samplerInfoWithName.isArray = samplerInfo.isArray;
+        samplerInfoWithName.isCube = samplerInfo.isCube;
+        samplerInfoWithName.isShadow = samplerInfo.isShadow;
+        samplerInfos.push_back(std::move(samplerInfoWithName));
+    }
+
+    return samplerInfos;
+}
+
 void InspectedGLSL::ReflectDataBlocks(GLenum programInterface, pmr::vector<DataBlock> &blocks) {
     GLint numResources = 0;
     glGetProgramInterfaceiv(mHandle, programInterface, GL_ACTIVE_RESOURCES, &numResources);

@@ -60,6 +60,10 @@ class InspectedGLSL {
         GLint textureUnit;
     };
 
+    struct SamplerUniformInfoWithName : SamplerUniformInfo {
+        std::string fullName;
+    };
+
     struct Uniform {
         std::string fullName;
         std::string name;
@@ -136,6 +140,7 @@ class InspectedGLSL {
     inline pmr::vector<BufferVariable> const &GetBufferVariables() const;
     inline pmr::vector<DataBlock> const &GetBufferBlocks() const;
     inline pmr::vector<AtomicCounterBuffer> const &GetAtomicCounterBuffers() const;
+    pmr::vector<SamplerUniformInfoWithName> GetSamplers() const;
 
     // This will not work on an instance based on a visual program.
     // This instance must correspond to a compute shader only program.

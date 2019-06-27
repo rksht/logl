@@ -26,7 +26,7 @@ else()
 endif()
 in_tests_folder(shadowmap_test)
 
-add_executable(diffuse_irradiance_map diffuse_irradiance_map.cpp diffuse_irradiance_map.h)
+add_executable(diffuse_irradiance_map diffuse_irradiance_map.cpp diffuse_irradiance_map.h diffuse_irradiance_utils.inc.h)
 if (LOGL_FSANITIZE_MEMORY)
   target_link_libraries(diffuse_irradiance_map -lasan learnogl)
 else()

@@ -1,5 +1,6 @@
 // Audio system. Contains active sounds and abstracts different audio implementations
 
+#if 0
 #pragma once
 
 #include <learnogl/kitchen_sink.h>
@@ -41,5 +42,7 @@ ResourceHandle *load_wav_file(const char *relative_path);
 
 #else
 #    warning "Audio impl in the cards"
+
+#endif
 
 #endif
