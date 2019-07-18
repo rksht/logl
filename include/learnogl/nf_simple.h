@@ -269,6 +269,8 @@ template <typename T> struct SimpleParse<std::vector<T>> {
 // Just a function to replace the project-relative path to an absolute path
 fs::path simple_absolute_path(const char *path_relative_to_project);
 
+
+// TODO: Can be made simpler. Prefer a runtime construction as opposed to compile time.
 namespace json_schema {
 
 // Validating JSON documents using a schema. The scheme is given as a compile time template expression. Not

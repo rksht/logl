@@ -122,15 +122,10 @@ REALLY_INLINE GLObjectKind::E resource_kind_from_id16(RMResourceID16 resource) {
     return (GLObjectKind::E)GLResource64_Kind_Mask::extract(resource);
 }
 
-struct BufferInfo {
-    GLuint handle;
+struct BufferCreateInfo;
+
+struct BufferExtraInfo {
     u32 bytes;
-
-    BufferInfo() = default;
-
-    BufferInfo(GLuint gl_handle, u32 bytes)
-        : handle(gl_handle)
-        , bytes(bytes) {}
 };
 
 struct Texture2DInfo {
@@ -234,7 +229,7 @@ struct BufferCreateInfo {
     const char *name = nullptr;
 };
 
-struct VertexBufferInfo {
+struct VertexBufferExtraInfo {
     u32 bytes = 0;
     BufferCreateFlags create_flags;
 
@@ -242,13 +237,14 @@ struct VertexBufferInfo {
     void *persisting_ptr = nullptr;
 };
 
-struct IndexBufferInfo {
+struct IndexBufferExtraInfo {
     u32 bytes = 0;
     BufferCreateFlags create_flags;
 };
 
-// How a texel is going to be read from the shader when accessed using a sampler.
-ENUMSTRUCT TexelSamplerType {
+/// Enum denoting the data types returned when a sampler is used to sample from a texture in shader. This is
+/// only used for validating purposes.
+ENUMSTRUCT TexelSamplerScalarType {
     enum E : u32 { INVALID = 0, FLOAT, UNSIGNED_INT, SIGNED_INT, COUNT };
 
     DECL_BITS_CHECK(u32);
@@ -377,7 +373,7 @@ struct TextureInfo {
     u16 layers = 0; // If this is an array texture, layers >= 1.
     u8 mips = 0;
 
-    TexelSamplerType::E sampler_type;
+    TexelSamplerScalarType::E sampler_type;
     TexelBaseType::E internal_type;
 
     // If this texture is actually a 'view texture', the original texture ('storage' texture) is pointed
@@ -419,6 +415,8 @@ struct VertexBufferHandle : GLObjectHandle {
         : GLObjectHandle{ rmid } {}
 };
 
+struct RenderManager; // Fwd
+
 struct IndexBufferHandle : GLObjectHandle {
     IndexBufferHandle(RMResourceID16 rmid = 0)
         : GLObjectHandle{ rmid } {}
@@ -446,6 +444,11 @@ struct ShaderStorageBufferHandle : GLObjectHandle {
 
 struct Texture2DHandle : GLObjectHandle {
     Texture2DHandle(RMResourceID16 rmid = 0)
+        : GLObjectHandle{ rmid } {}
+};
+
+struct Texture3DHandle : GLObjectHandle {
+    Texture3DHandle(RMResourceID16 rmid = 0)
         : GLObjectHandle{ rmid } {}
 };
 
@@ -510,11 +513,11 @@ struct FboPerAttachmentDim {
     struct AttachmentInfo {
         u16 width = 0;
         u16 height = 0;
-        TexelSamplerType::E sampler_type = TexelSamplerType::INVALID;
+        TexelSamplerScalarType::E sampler_type = TexelSamplerScalarType::INVALID;
         TexelBaseType::E internal_type = TexelBaseType::INVALID;
 
         // Is valid if a texture is backing this attachment
-        bool valid() const { return sampler_type != TexelSamplerType::INVALID; }
+        bool valid() const { return sampler_type != TexelSamplerScalarType::INVALID; }
     };
 
     std::array<AttachmentInfo, MAX_FRAGMENT_OUTPUTS> color_attachment_dims;
@@ -599,24 +602,24 @@ struct RenderManager : NonCopyable {
 
     // Buffer hash maps
 
-    fo::PodHash<RMResourceID16, BufferInfo> vertex_buffers =
-        fo::make_pod_hash<RMResourceID16, BufferInfo>(_allocator);
+    fo::PodHash<RMResourceID16, BufferExtraInfo> vertex_buffers =
+        fo::make_pod_hash<RMResourceID16, BufferExtraInfo>(_allocator);
 
-    fo::PodHash<RMResourceID16, BufferInfo> element_array_buffers =
-        fo::make_pod_hash<RMResourceID16, BufferInfo>(_allocator);
+    fo::PodHash<RMResourceID16, BufferExtraInfo> element_array_buffers =
+        fo::make_pod_hash<RMResourceID16, BufferExtraInfo>(_allocator);
 
-    fo::PodHash<RMResourceID16, BufferInfo> uniform_buffers =
-        fo::make_pod_hash<RMResourceID16, BufferInfo>(_allocator);
-    fo::PodHash<RMResourceID16, BufferInfo> storage_buffers =
-        fo::make_pod_hash<RMResourceID16, BufferInfo>(_allocator);
-    fo::PodHash<RMResourceID16, BufferInfo> pixel_pack_buffers =
-        fo::make_pod_hash<RMResourceID16, BufferInfo>(_allocator);
+    fo::PodHash<RMResourceID16, BufferExtraInfo> uniform_buffers =
+        fo::make_pod_hash<RMResourceID16, BufferExtraInfo>(_allocator);
+    fo::PodHash<RMResourceID16, BufferExtraInfo> storage_buffers =
+        fo::make_pod_hash<RMResourceID16, BufferExtraInfo>(_allocator);
+    fo::PodHash<RMResourceID16, BufferExtraInfo> pixel_pack_buffers =
+        fo::make_pod_hash<RMResourceID16, BufferExtraInfo>(_allocator);
 
-    fo::PodHash<RMResourceID16, BufferInfo> pixel_unpack_buffers =
-        fo::make_pod_hash<RMResourceID16, BufferInfo>(_allocator);
+    fo::PodHash<RMResourceID16, BufferExtraInfo> pixel_unpack_buffers =
+        fo::make_pod_hash<RMResourceID16, BufferExtraInfo>(_allocator);
 
     // Array map of resource id to the above buffer tables keyed by type.
-    std::array<fo::PodHash<RMResourceID16, BufferInfo> *, NUM_GL_BUFFER_KINDS> _kind_to_buffer;
+    std::array<fo::PodHash<RMResourceID16, BufferExtraInfo> *, NUM_GL_BUFFER_KINDS> _kind_to_buffer;
 
     fo::PodHash<RMResourceID16, u32> _buffer_sizes = fo::make_pod_hash<RMResourceID16, u32>(_allocator);
 
@@ -760,6 +763,9 @@ PixelUnpackBufferHandle create_pixel_unpack_buffer(RenderManager &self, const Bu
 Texture2DHandle
 create_texture_2d(RenderManager &self, TextureCreateInfo texture_ci, const char *name = nullptr);
 
+Texture3DHandle
+create_texture_3d(RenderManager &self, TextureCreateInfo &texture_ci, const char *name = nullptr);
+
 struct ShaderDefines; // Fwd
 
 // Being compatible for now.
@@ -893,7 +899,7 @@ void bind_to_bindpoint(RenderManager &self, UniformBufferHandle ubo_handle, GLui
 void add_backing_texture_to_view(RenderManager &self, RMResourceID16 view_fb_rmid);
 void add_backing_depth_texture_to_view(RenderManager &self);
 
-struct SourceToBufferInfo {
+struct SourceToBufferExtraInfo {
     const void *source_bytes;
     u32 num_bytes;
     u32 byte_offset;
@@ -901,9 +907,9 @@ struct SourceToBufferInfo {
 
     static constexpr u32 COPY_FULL = 0;
 
-    static constexpr SourceToBufferInfo
+    static constexpr SourceToBufferExtraInfo
     after_discard(const void *source_bytes, u32 byte_offset, u32 num_bytes = COPY_FULL) {
-        SourceToBufferInfo info = {};
+        SourceToBufferExtraInfo info = {};
         info.source_bytes = source_bytes;
         info.num_bytes = num_bytes;
         info.byte_offset = byte_offset;
@@ -912,9 +918,9 @@ struct SourceToBufferInfo {
         return info;
     }
 
-    static constexpr SourceToBufferInfo
+    static constexpr SourceToBufferExtraInfo
     dont_discard(const void *source_bytes, u32 byte_offset, u32 num_bytes = COPY_FULL) {
-        SourceToBufferInfo info = {};
+        SourceToBufferExtraInfo info = {};
         info.source_bytes = source_bytes;
         info.num_bytes = num_bytes;
         info.byte_offset = byte_offset;
@@ -924,7 +930,9 @@ struct SourceToBufferInfo {
     }
 };
 
-void source_to_uniform_buffer(RenderManager &self, UniformBufferHandle ubo, SourceToBufferInfo source_info);
+void source_to_uniform_buffer(RenderManager &self,
+                              UniformBufferHandle ubo,
+                              SourceToBufferExtraInfo source_info);
 
 struct PixelBufferCopyInfo {
     RMResourceID16 rmid = 0;

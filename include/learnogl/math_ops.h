@@ -911,8 +911,8 @@ inline fo::Quaternion slerp(const fo::Quaternion &a, const fo::Quaternion &b, fl
 }
 #endif
 
-// A plane in 3 dimensions represented by its normal N and signed distance D from origin. So the whole
-// quantity can be stored in a single Vector4.
+/// A plane in 3 dimensions represented by its normal N and signed distance D from origin. So the whole
+/// quantity can be stored in a single Vector4.
 struct Plane3 {
     fo::Vector4 _v;
 
@@ -959,8 +959,8 @@ struct SymmetricEigenSolver3x3_Result {
 
 void eigensolve_sym3x3(const fo::Matrix3x3 &symm, SymmetricEigenSolver3x3_Result &out);
 
-// -- A full local transform that can be attached to any object that has a scale, position, orientation. The
-// affine matrix this denotes is R * S + T.
+/// A full local transform that can be attached to any object that has a scale, position, orientation. The
+/// affine matrix this denotes is R * S + T.
 struct LocalTransform {
     fo::Vector3 scale;
     fo::Quaternion orientation;

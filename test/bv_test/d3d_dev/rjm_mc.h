@@ -82,14 +82,14 @@
 // Custom memory allocator.
 #ifndef MC_REALLOC
 #include <stdlib.h>
-#define MC_REALLOC  realloc
+#define MC_REALLOC	realloc
 #endif
 
 typedef struct {
-    float x, y, z;
-    float nx, ny, nz;
+	float x, y, z;
+	float nx, ny, nz;
 #if MC_EXTRA_DATA > 0
-    float extra[MC_EXTRA_DATA];     // custom field data
+	float extra[MC_EXTRA_DATA];		// custom field data
 #endif
 } McVertex;
 
@@ -101,9 +101,9 @@ typedef float McIsoFn(const float *pos, float *extra, void *userparam);
 // Mesh returned by the algorithm.
 // Free the data yourself (or call mcFree).
 typedef struct {
-    int nverts, ntris;
-    McVertex *verts;
-    int *indices;
+	int nverts, ntris;
+	McVertex *verts;
+	int *indices;
 } McMesh;
 
 #ifdef __cplusplus
@@ -132,44 +132,44 @@ void mcFree(McMesh *mesh);
 #include <math.h>
 
 typedef struct {
-    float x, y, z;
-    union { float value; unsigned sign; } u;
-    int vtx[3];
+	float x, y, z;
+	union { float value; unsigned sign; } u;
+	int vtx[3];
 } McCorner;
 
 static short mcEdgeTable[256]= {
-    0x000, 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c,
-    0x80c, 0x905, 0xa0f, 0xb06, 0xc0a, 0xd03, 0xe09, 0xf00,
-    0x190, 0x099, 0x393, 0x29a, 0x596, 0x49f, 0x795, 0x69c,
-    0x99c, 0x895, 0xb9f, 0xa96, 0xd9a, 0xc93, 0xf99, 0xe90,
-    0x230, 0x339, 0x033, 0x13a, 0x636, 0x73f, 0x435, 0x53c,
-    0xa3c, 0xb35, 0x83f, 0x936, 0xe3a, 0xf33, 0xc39, 0xd30,
-    0x3a0, 0x2a9, 0x1a3, 0x0aa, 0x7a6, 0x6af, 0x5a5, 0x4ac,
-    0xbac, 0xaa5, 0x9af, 0x8a6, 0xfaa, 0xea3, 0xda9, 0xca0,
-    0x460, 0x569, 0x663, 0x76a, 0x066, 0x16f, 0x265, 0x36c,
-    0xc6c, 0xd65, 0xe6f, 0xf66, 0x86a, 0x963, 0xa69, 0xb60,
-    0x5f0, 0x4f9, 0x7f3, 0x6fa, 0x1f6, 0x0ff, 0x3f5, 0x2fc,
-    0xdfc, 0xcf5, 0xfff, 0xef6, 0x9fa, 0x8f3, 0xbf9, 0xaf0,
-    0x650, 0x759, 0x453, 0x55a, 0x256, 0x35f, 0x055, 0x15c,
-    0xe5c, 0xf55, 0xc5f, 0xd56, 0xa5a, 0xb53, 0x859, 0x950,
-    0x7c0, 0x6c9, 0x5c3, 0x4ca, 0x3c6, 0x2cf, 0x1c5, 0x0cc,
-    0xfcc, 0xec5, 0xdcf, 0xcc6, 0xbca, 0xac3, 0x9c9, 0x8c0,
-    0x8c0, 0x9c9, 0xac3, 0xbca, 0xcc6, 0xdcf, 0xec5, 0xfcc,
-    0x0cc, 0x1c5, 0x2cf, 0x3c6, 0x4ca, 0x5c3, 0x6c9, 0x7c0,
-    0x950, 0x859, 0xb53, 0xa5a, 0xd56, 0xc5f, 0xf55, 0xe5c,
-    0x15c, 0x055, 0x35f, 0x256, 0x55a, 0x453, 0x759, 0x650,
-    0xaf0, 0xbf9, 0x8f3, 0x9fa, 0xef6, 0xfff, 0xcf5, 0xdfc,
-    0x2fc, 0x3f5, 0x0ff, 0x1f6, 0x6fa, 0x7f3, 0x4f9, 0x5f0,
-    0xb60, 0xa69, 0x963, 0x86a, 0xf66, 0xe6f, 0xd65, 0xc6c,
-    0x36c, 0x265, 0x16f, 0x066, 0x76a, 0x663, 0x569, 0x460,
-    0xca0, 0xda9, 0xea3, 0xfaa, 0x8a6, 0x9af, 0xaa5, 0xbac,
-    0x4ac, 0x5a5, 0x6af, 0x7a6, 0x0aa, 0x1a3, 0x2a9, 0x3a0,
-    0xd30, 0xc39, 0xf33, 0xe3a, 0x936, 0x83f, 0xb35, 0xa3c,
-    0x53c, 0x435, 0x73f, 0x636, 0x13a, 0x033, 0x339, 0x230,
-    0xe90, 0xf99, 0xc93, 0xd9a, 0xa96, 0xb9f, 0x895, 0x99c,
-    0x69c, 0x795, 0x49f, 0x596, 0x29a, 0x393, 0x099, 0x190,
-    0xf00, 0xe09, 0xd03, 0xc0a, 0xb06, 0xa0f, 0x905, 0x80c,
-    0x70c, 0x605, 0x50f, 0x406, 0x30a, 0x203, 0x109, 0x000
+	0x000, 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c,
+	0x80c, 0x905, 0xa0f, 0xb06, 0xc0a, 0xd03, 0xe09, 0xf00,
+	0x190, 0x099, 0x393, 0x29a, 0x596, 0x49f, 0x795, 0x69c,
+	0x99c, 0x895, 0xb9f, 0xa96, 0xd9a, 0xc93, 0xf99, 0xe90,
+	0x230, 0x339, 0x033, 0x13a, 0x636, 0x73f, 0x435, 0x53c,
+	0xa3c, 0xb35, 0x83f, 0x936, 0xe3a, 0xf33, 0xc39, 0xd30,
+	0x3a0, 0x2a9, 0x1a3, 0x0aa, 0x7a6, 0x6af, 0x5a5, 0x4ac,
+	0xbac, 0xaa5, 0x9af, 0x8a6, 0xfaa, 0xea3, 0xda9, 0xca0,
+	0x460, 0x569, 0x663, 0x76a, 0x066, 0x16f, 0x265, 0x36c,
+	0xc6c, 0xd65, 0xe6f, 0xf66, 0x86a, 0x963, 0xa69, 0xb60,
+	0x5f0, 0x4f9, 0x7f3, 0x6fa, 0x1f6, 0x0ff, 0x3f5, 0x2fc,
+	0xdfc, 0xcf5, 0xfff, 0xef6, 0x9fa, 0x8f3, 0xbf9, 0xaf0,
+	0x650, 0x759, 0x453, 0x55a, 0x256, 0x35f, 0x055, 0x15c,
+	0xe5c, 0xf55, 0xc5f, 0xd56, 0xa5a, 0xb53, 0x859, 0x950,
+	0x7c0, 0x6c9, 0x5c3, 0x4ca, 0x3c6, 0x2cf, 0x1c5, 0x0cc,
+	0xfcc, 0xec5, 0xdcf, 0xcc6, 0xbca, 0xac3, 0x9c9, 0x8c0,
+	0x8c0, 0x9c9, 0xac3, 0xbca, 0xcc6, 0xdcf, 0xec5, 0xfcc,
+	0x0cc, 0x1c5, 0x2cf, 0x3c6, 0x4ca, 0x5c3, 0x6c9, 0x7c0,
+	0x950, 0x859, 0xb53, 0xa5a, 0xd56, 0xc5f, 0xf55, 0xe5c,
+	0x15c, 0x055, 0x35f, 0x256, 0x55a, 0x453, 0x759, 0x650,
+	0xaf0, 0xbf9, 0x8f3, 0x9fa, 0xef6, 0xfff, 0xcf5, 0xdfc,
+	0x2fc, 0x3f5, 0x0ff, 0x1f6, 0x6fa, 0x7f3, 0x4f9, 0x5f0,
+	0xb60, 0xa69, 0x963, 0x86a, 0xf66, 0xe6f, 0xd65, 0xc6c,
+	0x36c, 0x265, 0x16f, 0x066, 0x76a, 0x663, 0x569, 0x460,
+	0xca0, 0xda9, 0xea3, 0xfaa, 0x8a6, 0x9af, 0xaa5, 0xbac,
+	0x4ac, 0x5a5, 0x6af, 0x7a6, 0x0aa, 0x1a3, 0x2a9, 0x3a0,
+	0xd30, 0xc39, 0xf33, 0xe3a, 0x936, 0x83f, 0xb35, 0xa3c,
+	0x53c, 0x435, 0x73f, 0x636, 0x13a, 0x033, 0x339, 0x230,
+	0xe90, 0xf99, 0xc93, 0xd9a, 0xa96, 0xb9f, 0x895, 0x99c,
+	0x69c, 0x795, 0x49f, 0x596, 0x29a, 0x393, 0x099, 0x190,
+	0xf00, 0xe09, 0xd03, 0xc0a, 0xb06, 0xa0f, 0x905, 0x80c,
+	0x70c, 0x605, 0x50f, 0x406, 0x30a, 0x203, 0x109, 0x000
 };
 
 static char mcTriTable[256][16] = {
@@ -432,248 +432,249 @@ static char mcTriTable[256][16] = {
 };
 
 typedef struct {
-    McMesh mesh;
-    int maxverts, maxtris;
+	McMesh mesh;
+	int maxverts, maxtris;
 
-    McCorner *c[8];
-    float cellsize;
+	McCorner *c[8];
+	float cellsize;
 } McHelper;
 
 static int mcInterp(McHelper *help, McCorner *a, McCorner *b, int axis)
 {
-    // Re-use existing vertex if there is one.
-    if (a->vtx[axis] >= 0)
-        return a->vtx[axis];
+	// Re-use existing vertex if there is one.
+	if (a->vtx[axis] >= 0)
+		return a->vtx[axis];
 
-    // Allocate more space if needed.
-    int vtxidx = help->mesh.nverts++;
-    if (vtxidx >= help->maxverts) {
-        help->maxverts = help->maxverts ? help->maxverts * 2 : 4096;
-        help->mesh.verts = (McVertex *)MC_REALLOC(help->mesh.verts, help->maxverts*sizeof(McVertex));
-        if (help->mesh.verts == NULL)
-            return 0;
-    }
+	// Allocate more space if needed.
+	int vtxidx = help->mesh.nverts++;
+	if (vtxidx >= help->maxverts) {
+		help->maxverts = help->maxverts ? help->maxverts * 2 : 4096;
+		help->mesh.verts = (McVertex *)MC_REALLOC(help->mesh.verts, help->maxverts*sizeof(McVertex));
+		if (help->mesh.verts == NULL)
+			return 0;
+	}
 
-    // Get field intersection.
-    float w = a->u.value - b->u.value;
-    float t = 0;
-    if (fabsf(w) > 0.000001f)
-        t = a->u.value / w;
+	// Get field intersection.
+	float w = a->u.value - b->u.value;
+	float t = 0;
+	if (fabsf(w) > 0.000001f)
+		t = a->u.value / w;
 
-    // Write out a vertex. (do normals later)
-    McVertex *v = &help->mesh.verts[vtxidx];
-    float *pos = &v->x;
-    pos[0] = a->x;
-    pos[1] = a->y;
-    pos[2] = a->z;
-    pos[axis] += t * help->cellsize;
+	// Write out a vertex. (do normals later)
+	McVertex *v = &help->mesh.verts[vtxidx];
+	float *pos = &v->x;
+	pos[0] = a->x;
+	pos[1] = a->y;
+	pos[2] = a->z;
+	pos[axis] += t * help->cellsize;
 
-    a->vtx[axis] = vtxidx;
-    return vtxidx;
+	a->vtx[axis] = vtxidx;
+	return vtxidx;
 }
 
 static int mcGenerateCell(McHelper *help, int corners, int edges)
 {
-    // Generate a vertex for every intersecting edge.
-    int verts[12];
-    if (edges &    1) verts[0]  = mcInterp(help, help->c[0], help->c[1], 0);
-    if (edges &    2) verts[1]  = mcInterp(help, help->c[1], help->c[2], 1);
-    if (edges &    4) verts[2]  = mcInterp(help, help->c[3], help->c[2], 0);
-    if (edges &    8) verts[3]  = mcInterp(help, help->c[0], help->c[3], 1);
-    if (edges &   16) verts[4]  = mcInterp(help, help->c[4], help->c[5], 0);
-    if (edges &   32) verts[5]  = mcInterp(help, help->c[5], help->c[6], 1);
-    if (edges &   64) verts[6]  = mcInterp(help, help->c[7], help->c[6], 0);
-    if (edges &  128) verts[7]  = mcInterp(help, help->c[4], help->c[7], 1);
-    if (edges &  256) verts[8]  = mcInterp(help, help->c[0], help->c[4], 2);
-    if (edges &  512) verts[9]  = mcInterp(help, help->c[1], help->c[5], 2);
-    if (edges & 1024) verts[10] = mcInterp(help, help->c[2], help->c[6], 2);
-    if (edges & 2048) verts[11] = mcInterp(help, help->c[3], help->c[7], 2);
+	// Generate a vertex for every intersecting edge.
+	int verts[12];
+	if (edges &    1) verts[0]  = mcInterp(help, help->c[0], help->c[1], 0);
+	if (edges &    2) verts[1]  = mcInterp(help, help->c[1], help->c[2], 1);
+	if (edges &    4) verts[2]  = mcInterp(help, help->c[3], help->c[2], 0);
+	if (edges &    8) verts[3]  = mcInterp(help, help->c[0], help->c[3], 1);
+	if (edges &   16) verts[4]  = mcInterp(help, help->c[4], help->c[5], 0);
+	if (edges &   32) verts[5]  = mcInterp(help, help->c[5], help->c[6], 1);
+	if (edges &   64) verts[6]  = mcInterp(help, help->c[7], help->c[6], 0);
+	if (edges &  128) verts[7]  = mcInterp(help, help->c[4], help->c[7], 1);
+	if (edges &  256) verts[8]  = mcInterp(help, help->c[0], help->c[4], 2);
+	if (edges &  512) verts[9]  = mcInterp(help, help->c[1], help->c[5], 2);
+	if (edges & 1024) verts[10] = mcInterp(help, help->c[2], help->c[6], 2);
+	if (edges & 2048) verts[11] = mcInterp(help, help->c[3], help->c[7], 2);
 
-    if (help->mesh.verts == NULL)
-        return 1;
+	if (help->mesh.verts == NULL)
+		return 1;
 
-    // Create the triangles.
-    int i = 0;
-    char *tcode = mcTriTable[corners];
-    for (;;) {
-        int tcode0 = tcode[i];
-        if (tcode0 < 0)
-            return 0;
+	// Create the triangles.
+	int i = 0;
+	char *tcode = mcTriTable[corners];
+	for (;;) {
+		int tcode0 = tcode[i];
+		if (tcode0 < 0)
+			return 0;
 
-        int tcode1 = tcode[i+1];
-        int tcode2 = tcode[i+2];
+		int tcode1 = tcode[i+1];
+		int tcode2 = tcode[i+2];
 
-        // Allocate more space if needed.
-        int triidx = help->mesh.ntris++;
-        if (triidx >= help->maxtris) {
-            help->maxtris = help->maxtris ? help->maxtris * 2 : 4096;
-            help->mesh.indices = (int *)MC_REALLOC(help->mesh.indices, help->maxtris*sizeof(int)*3);
-            if (help->mesh.indices == NULL)
-                return 1;
-        }
+		// Allocate more space if needed.
+		int triidx = help->mesh.ntris++;
+		if (triidx >= help->maxtris) {
+			help->maxtris = help->maxtris ? help->maxtris * 2 : 4096;
+			help->mesh.indices = (int *)MC_REALLOC(help->mesh.indices, help->maxtris*sizeof(int)*3);
+			if (help->mesh.indices == NULL)
+				return 1;
+		}
 
-        int *idx = &help->mesh.indices[triidx*3];
-        idx[0] = verts[tcode0];
-        idx[1] = verts[tcode2];
-        idx[2] = verts[tcode1];
-        i += 3;
-    }
+		int *idx = &help->mesh.indices[triidx*3];
+		idx[0] = verts[tcode0];
+		idx[1] = verts[tcode2];
+		idx[2] = verts[tcode1];
+		i += 3;
+	}
 }
 
 McMesh mcGenerate(const float *bmin, const float *bmax, float cellsize, McIsoFn *fn, void *userparam)
 {
-    McHelper help;
-    float extra[MC_EXTRA_DATA+1];
+	float epsilon = cellsize * 0.1f;
 
-    help.maxverts = 0;
-    help.maxtris = 0;
-    help.mesh.nverts = 0;
-    help.mesh.ntris = 0;
-    help.mesh.verts = NULL;
-    help.mesh.indices = NULL;
-    help.cellsize = cellsize;
+	McHelper help;
+	float extra[MC_EXTRA_DATA+1];
 
-    // Calculate cell counts for each axis.
-    float invsize = 1.0f / cellsize;
-    int xd = (int)ceilf((bmax[0] - bmin[0]) * invsize);
-    int yd = (int)ceilf((bmax[1] - bmin[1]) * invsize);
-    int zd = (int)ceilf((bmax[2] - bmin[2]) * invsize);
-    if (xd <= 0 || yd <= 0 || zd <= 0)
-        return help.mesh;
+	help.maxverts = 0;
+	help.maxtris = 0;
+	help.mesh.nverts = 0;
+	help.mesh.ntris = 0;
+	help.mesh.verts = NULL;
+	help.mesh.indices = NULL;
+	help.cellsize = cellsize;
 
-    // Allocate 2D grids.
-    int stride = xd+1;
-    McCorner *grid0 = (McCorner *)MC_REALLOC(NULL, sizeof(McCorner) * (xd+1)*(yd+1));
-    McCorner *grid1 = (McCorner *)MC_REALLOC(NULL, sizeof(McCorner) * (xd+1)*(yd+1));
-    if (!grid0 || !grid1)
-        goto end;
+	// Calculate cell counts for each axis.
+	float invsize = 1.0f / cellsize;
+	int xd = (int)ceilf((bmax[0] - bmin[0]) * invsize);
+	int yd = (int)ceilf((bmax[1] - bmin[1]) * invsize);
+	int zd = (int)ceilf((bmax[2] - bmin[2]) * invsize);
+	if (xd <= 0 || yd <= 0 || zd <= 0)
+		return help.mesh;
 
-    // Prime the first slice.
-    McCorner *prime = grid0;
-    for (int y=0;y<=yd;y++)
-    {
-        for (int x=0;x<=xd;x++,prime++)
-        {
-            prime->x = bmin[0] + cellsize*x;
-            prime->y = bmin[1] + cellsize*y;
-            prime->z = bmin[2];
-            prime->u.value = fn(&prime->x, extra, userparam);
-            prime->vtx[0] = prime->vtx[1] = prime->vtx[2] = -1;
-        }
-    }
+	// Allocate 2D grids.
+	int stride = xd+1;
+	McCorner *grid0 = (McCorner *)MC_REALLOC(NULL, sizeof(McCorner) * (xd+1)*(yd+1));
+	McCorner *grid1 = (McCorner *)MC_REALLOC(NULL, sizeof(McCorner) * (xd+1)*(yd+1));
+	McCorner *prime = grid0;
+	if (!grid0 || !grid1)
+		goto end;
 
-    for (int z=0;z<zd;z++)
-    {
-        // Read the next slice.
-        McCorner *slice = grid1;
-        for (int y=0;y<=yd;y++)
-        {
-            for (int x=0;x<=xd;x++,slice++)
-            {
-                slice->x = bmin[0] + cellsize*x;
-                slice->y = bmin[1] + cellsize*y;
-                slice->z = bmin[2] + cellsize*(z+1);
-                slice->u.value = fn(&slice->x, extra, userparam);
-                slice->vtx[0] = slice->vtx[1] = slice->vtx[2] = -1;
-            }
-        }
+	// Prime the first slice.
+	for (int y=0;y<=yd;y++)
+	{
+		for (int x=0;x<=xd;x++,prime++)
+		{
+			prime->x = bmin[0] + cellsize*x;
+			prime->y = bmin[1] + cellsize*y;
+			prime->z = bmin[2];
+			prime->u.value = fn(&prime->x, extra, userparam);
+			prime->vtx[0] = prime->vtx[1] = prime->vtx[2] = -1;
+		}
+	}
 
-        // March over it.
-        for (int y=0;y<yd;y++)
-        {
-            // Get the eight corners of the cell.
-            int pos = y*stride;
-            McCorner *bottom = grid0 + pos;
-            McCorner *top = grid1 + pos;
-            help.c[0] = bottom;
-            help.c[1] = bottom + 1;
-            help.c[2] = bottom + stride + 1;
-            help.c[3] = bottom + stride;
-            help.c[4] = top;
-            help.c[5] = top + 1;
-            help.c[6] = top + stride + 1;
-            help.c[7] = top + stride;
+	for (int z=0;z<zd;z++)
+	{
+		// Read the next slice.
+		McCorner *slice = grid1;
+		for (int y=0;y<=yd;y++)
+		{
+			for (int x=0;x<=xd;x++,slice++)
+			{
+				slice->x = bmin[0] + cellsize*x;
+				slice->y = bmin[1] + cellsize*y;
+				slice->z = bmin[2] + cellsize*(z+1);
+				slice->u.value = fn(&slice->x, extra, userparam);
+				slice->vtx[0] = slice->vtx[1] = slice->vtx[2] = -1;
+			}
+		}
 
-            int count = xd;
-            do {
-                // See which vertices are inside/outside the volume.
-                int corners;
-                corners  = (help.c[0]->u.sign >> 31) & 1;
-                corners |= (help.c[1]->u.sign >> 30) & 2;
-                corners |= (help.c[2]->u.sign >> 29) & 4;
-                corners |= (help.c[3]->u.sign >> 28) & 8;
-                corners |= (help.c[4]->u.sign >> 27) & 16;
-                corners |= (help.c[5]->u.sign >> 26) & 32;
-                corners |= (help.c[6]->u.sign >> 25) & 64;
-                corners |= (help.c[7]->u.sign >> 24) & 128;
+		// March over it.
+		for (int y=0;y<yd;y++)
+		{
+			// Get the eight corners of the cell.
+			int pos = y*stride;
+			McCorner *bottom = grid0 + pos;
+			McCorner *top = grid1 + pos;
+			help.c[0] = bottom;
+			help.c[1] = bottom + 1;
+			help.c[2] = bottom + stride + 1;
+			help.c[3] = bottom + stride;
+			help.c[4] = top;
+			help.c[5] = top + 1;
+			help.c[6] = top + stride + 1;
+			help.c[7] = top + stride;
 
-                // See which edges intersect the cell.
-                int edges = mcEdgeTable[corners];
-                if (edges != 0)
-                {
-                    if (mcGenerateCell(&help, corners, edges))
-                    {
-                        // Out of memory.
-                        mcFree(&help.mesh);
-                        goto end;
-                    }
-                }
+			int count = xd;
+			do {
+				// See which vertices are inside/outside the volume.
+				int corners;
+				corners  = (help.c[0]->u.sign >> 31) & 1;
+				corners |= (help.c[1]->u.sign >> 30) & 2;
+				corners |= (help.c[2]->u.sign >> 29) & 4;
+				corners |= (help.c[3]->u.sign >> 28) & 8;
+				corners |= (help.c[4]->u.sign >> 27) & 16;
+				corners |= (help.c[5]->u.sign >> 26) & 32;
+				corners |= (help.c[6]->u.sign >> 25) & 64;
+				corners |= (help.c[7]->u.sign >> 24) & 128;
 
-                for (int i=0;i<8;i++)
-                    help.c[i]++;
-            } while (--count);
-        }
+				// See which edges intersect the cell.
+				int edges = mcEdgeTable[corners];
+				if (edges != 0)
+				{
+					if (mcGenerateCell(&help, corners, edges))
+					{
+						// Out of memory.
+						mcFree(&help.mesh);
+						goto end;
+					}
+				}
 
-        // Swap slices.
-        McCorner *tmp = grid0;
-        grid0 = grid1;
-        grid1 = tmp;
-    }
+				for (int i=0;i<8;i++)
+					help.c[i]++;
+			} while (--count);
+		}
 
-    // Calculate all normals and extra data.
-    float epsilon = cellsize * 0.1f;
-    for (int n=0;n<help.mesh.nverts;n++)
-    {
-        McVertex *v = &help.mesh.verts[n];
-        float v1[3] = { v->x - epsilon, v->y, v->z };
-        float v2[3] = { v->x, v->y - epsilon, v->z };
-        float v3[3] = { v->x, v->y, v->z - epsilon };
+		// Swap slices.
+		McCorner *tmp = grid0;
+		grid0 = grid1;
+		grid1 = tmp;
+	}
 
-        // Sample the field locally 4 times to compute the field gradient.
-        float f1 = fn(v1, extra, userparam);
-        float f2 = fn(v2, extra, userparam);
-        float f3 = fn(v3, extra, userparam);
-        float f0 = fn(&v->x, extra, userparam);
-        v->nx = f0 - f1;
-        v->ny = f0 - f2;
-        v->nz = f0 - f3;
+	// Calculate all normals and extra data.
+	for (int n=0;n<help.mesh.nverts;n++)
+	{
+		McVertex *v = &help.mesh.verts[n];
+		float v1[3] = { v->x - epsilon, v->y, v->z };
+		float v2[3] = { v->x, v->y - epsilon, v->z };
+		float v3[3] = { v->x, v->y, v->z - epsilon };
 
-        // Normalize it.
-        float len = sqrtf(v->nx*v->nx + v->ny*v->ny + v->nz*v->nz);
-        float s = (len >= 0.00000000000001f) ? 1.0f/len : 0;
-        v->nx *= s;
-        v->ny *= s;
-        v->nz *= s;
+		// Sample the field locally 4 times to compute the field gradient.
+		float f1 = fn(v1, extra, userparam);
+		float f2 = fn(v2, extra, userparam);
+		float f3 = fn(v3, extra, userparam);
+		float f0 = fn(&v->x, extra, userparam);
+		v->nx = f0 - f1;
+		v->ny = f0 - f2;
+		v->nz = f0 - f3;
+
+		// Normalize it.
+		float len = sqrtf(v->nx*v->nx + v->ny*v->ny + v->nz*v->nz);
+		float s = (len >= 0.00000000000001f) ? 1.0f/len : 0;
+		v->nx *= s;
+		v->ny *= s;
+		v->nz *= s;
 
 #if MC_EXTRA_DATA > 0
-        // Copy any additional data channels across too.
-        for (int i=0;i<MC_EXTRA_DATA;i++)
-            v->extra[i] = extra[i];
+		// Copy any additional data channels across too.
+		for (int i=0;i<MC_EXTRA_DATA;i++)
+			v->extra[i] = extra[i];
 #endif
-    }
+	}
 
 end:
-    MC_REALLOC(grid0, 0);
-    MC_REALLOC(grid1, 0);
-    return help.mesh;
+	MC_REALLOC(grid0, 0);
+	MC_REALLOC(grid1, 0);
+	return help.mesh;
 }
 
 void mcFree(McMesh *mesh)
 {
-    MC_REALLOC(mesh->verts, 0);
-    MC_REALLOC(mesh->indices, 0);
-    mesh->nverts = 0;
-    mesh->ntris = 0;
+	MC_REALLOC(mesh->verts, 0);
+	MC_REALLOC(mesh->indices, 0);
+	mesh->nverts = 0;
+	mesh->ntris = 0;
 }
 
 #endif // MC_IMPLEMENTATION

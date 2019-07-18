@@ -28,6 +28,8 @@ if (MSVC)
   target_link_libraries(dxmath_vs_logl ${D3D11_LIBRARIES} ${D3D_COMPILER_LIB} ${DXGUID_LIB} learnogl)
   in_tests_folder(dxmath_vs_logl)
 
-  add_executable(gen_obj_mesh gen_obj_mesh.cpp rjm_mc.h)
-  target_link_libraries(gen_obj_mesh learnogl)
 endif()
+
+add_executable(gen_obj_mesh gen_obj_mesh.cpp rjm_mc.h)
+target_link_libraries(gen_obj_mesh learnogl)
+

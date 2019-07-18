@@ -49,7 +49,7 @@ RenderManager::RenderManager(fo::Allocator &backing_allocator)
     _cached_blendfunc_states[0].set_default();
 
     // First entry of the `_fbos` array is just a default constructed NewFBO, denoting default framebuffer.
-    var_ &default_fbo = fo::push_back(_fbos, {});
+    var_ &default_fbo = fo::emplace_back(_fbos);
     default_fbo._is_default_fbo = true;
 }
 
@@ -104,9 +104,15 @@ GLbitfield gl_buffer_access(BufferCreateFlags e) {
     return b;
 }
 
-static RMResourceID16
-create_buffer_common(RenderManager &rm, const BufferCreateInfo &ci, GLObjectKind::E buffer_kind) {
-    GLenum gl_target = rm_to_gl_buffer_kind.get(buffer_kind);
+TU_LOCAL void init_buffer_extra_info(BufferExtraInfo &extra_info, const BufferCreateInfo &create_info) {
+    extra_info.bytes = create_info.bytes;
+}
+
+/// Returns a tuple of the form (rmid of the buffer, reference to BufferExtraInfo). The buffer info object is
+/// further filled by the dedicated functions as followed after this one.
+static auto create_buffer_common(RenderManager &rm, const BufferCreateInfo &ci, GLObjectKind::E buffer_kind) {
+    GLenum gl_target = rm_to_gl_buffer_kind.get_maybe_nil(buffer_kind);
+    DCHECK_NE_F(gl_target, 0);
 
     GLuint gl_handle = 0;
     glGenBuffers(1, &gl_handle);
@@ -126,50 +132,68 @@ create_buffer_common(RenderManager &rm, const BufferCreateInfo &ci, GLObjectKind
     const_ table_p = rm._kind_to_buffer[(u32)buffer_kind];
     fo::set(rm._rmid16_to_res64, rmid, id64);
 
-    fo::set(*table_p, rmid, BufferInfo{ gl_handle, ci.bytes });
+    BufferExtraInfo extra_info = {};
+    init_buffer_extra_info(extra_info, ci); // Initialize the common part
+
+    var_ &buffer_info_ref = fo::set_then_ref(*table_p, rmid, extra_info);
     fo::set(rm._buffer_sizes, rmid, ci.bytes);
 
     eng::set_buffer_label(gl_handle, ci.name);
 
-    return rmid;
+    return std::make_tuple(rmid, std::ref(buffer_info_ref));
 }
 
 VertexBufferHandle create_vertex_buffer(RenderManager &rm, const BufferCreateInfo &ci) {
-    return { create_buffer_common(rm, ci, GLObjectKind::VERTEX_BUFFER) };
+    var_ tuple = create_buffer_common(rm, ci, GLObjectKind::VERTEX_BUFFER);
+    var_ rmid = std::get<0>(tuple);
+    return rmid;
 }
 
 ShaderStorageBufferHandle create_storage_buffer(RenderManager &rm, const BufferCreateInfo &ci) {
-    return { create_buffer_common(rm, ci, GLObjectKind::SHADER_STORAGE_BUFFER) };
+    var_ tuple = create_buffer_common(rm, ci, GLObjectKind::SHADER_STORAGE_BUFFER);
+    var_ rmid = std::get<0>(tuple);
+    return rmid;
 }
 
 UniformBufferHandle create_uniform_buffer(RenderManager &rm, const BufferCreateInfo &ci) {
-    return { create_buffer_common(rm, ci, GLObjectKind::UNIFORM_BUFFER) };
+    var_ tuple = create_buffer_common(rm, ci, GLObjectKind::UNIFORM_BUFFER);
+    var_ rmid = std::get<0>(tuple);
+    return rmid;
 }
 
 IndexBufferHandle create_element_array_buffer(RenderManager &rm, const BufferCreateInfo &ci) {
-    return { create_buffer_common(rm, ci, GLObjectKind::ELEMENT_ARRAY_BUFFER) };
+    var_ tuple = create_buffer_common(rm, ci, GLObjectKind::ELEMENT_ARRAY_BUFFER);
+    var_ rmid = std::get<0>(tuple);
+    return rmid;
 }
 
 PixelPackBufferHandle create_pixel_pack_buffer(RenderManager &rm, const BufferCreateInfo &ci) {
-    return { create_buffer_common(rm, ci, GLObjectKind::PIXEL_PACK_BUFFER) };
+    var_ tuple = create_buffer_common(rm, ci, GLObjectKind::PIXEL_PACK_BUFFER);
+    var_ rmid = std::get<0>(tuple);
+    return rmid;
 }
 
 PixelUnpackBufferHandle create_pixel_unpack_buffer(RenderManager &rm, const BufferCreateInfo &ci) {
-    return { create_buffer_common(rm, ci, GLObjectKind::PIXEL_UNPACK_BUFFER) };
+    var_ tuple = create_buffer_common(rm, ci, GLObjectKind::PIXEL_UNPACK_BUFFER);
+    var_ rmid = std::get<0>(tuple);
+    return rmid;
 }
 
-void source_to_uniform_buffer(RenderManager &self, UniformBufferHandle ubo, SourceToBufferInfo source_info) {
-    const BufferInfo &buffer_info = find_with_end(self.uniform_buffers, ubo.rmid())
-                                        .keyvalue_must("No buffer info found for uniform buffer")
-                                        .second();
-    glBindBuffer(GL_UNIFORM_BUFFER, buffer_info.handle);
+void source_to_uniform_buffer(RenderManager &self,
+                              UniformBufferHandle ubo,
+                              SourceToBufferExtraInfo source_info) {
+    const BufferExtraInfo &buffer_info = find_with_end(self.uniform_buffers, ubo.rmid())
+                                             .keyvalue_must("No buffer info found for uniform buffer")
+                                             .second();
+    const_ gluint = get_gluint_from_rmid(self, ubo.rmid());
+    glBindBuffer(GL_UNIFORM_BUFFER, gluint);
 
     if (source_info.num_bytes == 0) {
         source_info.num_bytes = buffer_info.bytes;
     }
 
     if (source_info.discard) {
-        glInvalidateBufferSubData(buffer_info.handle, source_info.byte_offset, source_info.num_bytes);
+        glInvalidateBufferSubData(gluint, source_info.byte_offset, source_info.num_bytes);
     }
     glBufferSubData(
         GL_UNIFORM_BUFFER, source_info.byte_offset, source_info.num_bytes, source_info.source_bytes);
@@ -397,17 +421,29 @@ constexpr CexprSparseArray<GLInternalFormat, num_texel_type_configs> texel_info_
 constexpr bool sampler_type_and_client_type_ok(TexelBaseType::E client_type,
                                                TexelComponents::E client_components,
                                                TexelInterpretType::E interpret_type,
-                                               TexelSamplerType::E sampler_type) {
+                                               TexelSamplerScalarType::E sampler_type) {
     bool ok = true;
 
-    ok = ok &&
-         (IMPLIES(interpret_type == TexelInterpretType::NORMALIZED, sampler_type == TexelSamplerType::FLOAT));
+    ok = ok && (IMPLIES(interpret_type == TexelInterpretType::NORMALIZED,
+                        sampler_type == TexelSamplerScalarType::FLOAT));
 
     ok = ok && IMPLIES((interpret_type == TexelInterpretType::UNNORMALIZED &&
                         TexelBaseType::is_integer(client_type)),
-                       sampler_type != TexelSamplerType::FLOAT);
+                       sampler_type != TexelSamplerScalarType::FLOAT);
 
     return ok;
+}
+
+TU_LOCAL TexelSamplerScalarType::E get_sampler_scalar_type(TexelInfo texel_info) {
+    return texel_info.interpret_type == TexelInterpretType::NORMALIZED
+               ? TexelSamplerScalarType::FLOAT
+               : TexelBaseType::is_float(texel_info.internal_type)
+                     ? TexelSamplerScalarType::FLOAT
+                     : TexelBaseType::is_signed(texel_info.internal_type)
+                           ? TexelSamplerScalarType::SIGNED_INT
+                           : TexelBaseType::is_unsigned(texel_info.internal_type)
+                                 ? TexelSamplerScalarType::UNSIGNED_INT
+                                 : TexelSamplerScalarType::INVALID;
 }
 
 Texture2DHandle create_texture_2d(RenderManager &self, TextureCreateInfo texture_ci, const char *name) {
@@ -586,15 +622,7 @@ Texture2DHandle create_texture_2d(RenderManager &self, TextureCreateInfo texture
 
     info.internal_type = texel_info.internal_type;
 
-    info.sampler_type = texel_info.interpret_type == TexelInterpretType::NORMALIZED
-                            ? TexelSamplerType::FLOAT
-                            : TexelBaseType::is_float(texel_info.internal_type)
-                                  ? TexelSamplerType::FLOAT
-                                  : TexelBaseType::is_signed(texel_info.internal_type)
-                                        ? TexelSamplerType::SIGNED_INT
-                                        : TexelBaseType::is_unsigned(texel_info.internal_type)
-                                              ? TexelSamplerType::UNSIGNED_INT
-                                              : TexelSamplerType::INVALID;
+    info.sampler_type = get_sampler_scalar_type(texel_info);
 
     self.texture_infos[rmid16] = info;
 
@@ -605,6 +633,52 @@ Texture2DHandle create_texture_2d(RenderManager &self, TextureCreateInfo texture
     eng::set_texture_label(gl_handle, name);
 
     return Texture2DHandle{ rmid16 };
+}
+
+Texture3DHandle create_texture_3d(RenderManager &self, TextureCreateInfo &texture_ci, const char *name) {
+
+    GLuint gl_handle = 0;
+    glGenTextures(1, &gl_handle);
+
+    glBindTexture(GL_TEXTURE_3D, gl_handle);
+
+    const_ &texel_info = texture_ci.texel_info;
+
+    const_ encoded_texel_info =
+        _ENCODE_TEXEL_INFO(texel_info.internal_type, texel_info.components, texel_info.interpret_type);
+
+    const_ gl_internal_format = texel_info_to_gl_internal_format.get_maybe_nil(encoded_texel_info);
+    CHECK_NE_F(gl_internal_format.e, 0, "Invalid texel info");
+
+    glTexStorage3D(GL_TEXTURE_3D,
+                   texture_ci.mips,
+                   gl_internal_format.e,
+                   texture_ci.width,
+                   texture_ci.height,
+                   texture_ci.depth);
+
+    set_texture_label(gl_handle, name);
+
+    RMResourceID16 rmid = new_resource_id(self);
+
+    LOG_F(INFO, "Created 3D Texture '%s' with rmid = %u", name ? name : "<unnamed>", rmid);
+
+    TextureInfo info;
+    info.rmid = rmid;
+    info.texture_kind = GLObjectKind::TEXTURE_3D;
+    info.width = texture_ci.width;
+    info.height = texture_ci.height;
+    info.depth = texture_ci.depth;
+    info.mips = texture_ci.mips;
+    info.internal_type = texel_info.internal_type;
+    info.sampler_type = get_sampler_scalar_type(texture_ci.texel_info);
+
+    self.texture_infos[rmid] = info;
+
+    self._rmid16_to_res64[rmid] = encode_glresource64(rmid, GLObjectKind::TEXTURE_3D, gl_handle);
+    CHECK_EQ_F((GLuint)GLResource64_GLuint_Mask::extract(self._rmid16_to_res64[rmid]), gl_handle);
+
+    return Texture3DHandle{ rmid };
 }
 
 void init_render_manager(RenderManager &self) {
@@ -967,7 +1041,8 @@ void set_program(RenderManager &self, const ShaderProgramHandle handle) {
 void bind_to_bindpoint(RenderManager &self, UniformBufferHandle ubo_handle, GLuint bindpoint) {
     auto res64_lookup = find_with_end(self.uniform_buffers, ubo_handle._rmid);
     CHECK_F(bool(res64_lookup));
-    GLuint h = GLResource64_GLuint_Mask::extract(res64_lookup.keyvalue().second().handle);
+
+    GLuint h = get_gluint_from_rmid(self, ubo_handle.rmid());
 
     // Buffer size
     auto size_lookup = find_with_end(self._buffer_sizes, ubo_handle._rmid);

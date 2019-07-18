@@ -5,16 +5,16 @@
 
 #include <GLFW/glfw3.h>
 #include <fmt/format.h>
+#include <learnogl/audio.h>
 #include <learnogl/colors.h>
 #include <learnogl/eye.h>
 #include <learnogl/file_monitor.h>
+#include <learnogl/fixed_string_buffer.h>
 #include <learnogl/gl_binding_state.h>
 #include <learnogl/input_handler.h>
 #include <learnogl/mesh.h>
 #include <learnogl/nf_simple.h>
 #include <learnogl/pmr_compatible_allocs.h>
-#include <learnogl/audio.h>
-#include <learnogl/fixed_string_buffer.h>
 #include <learnogl/resource.h>
 #include <learnogl/rng.h>
 #include <learnogl/shader.h>
@@ -157,6 +157,7 @@ GLApp &gl();
 
 // inline ResourceManager &g_res_man() { return gl().res_man; }
 
+/// Returns ref to the global BindingState object. Deprecated.
 inline BindingState &g_bs() { return gl().bs; }
 
 // inline SoundManager &g_sound_man() { return gl().sound_man; }
@@ -282,8 +283,8 @@ struct VaoFloatFormat {
         , relative_offset(relative_offset) {}
 };
 
-// Quickly write all the info needed to create a vao. All attributes are sourced from vertex buffer binding
-// point 0.
+/// Quickly write all the info needed to create a vao. All attributes are sourced from vertex buffer binding
+/// point 0.
 inline GLuint gen_vao(std::initializer_list<VaoFloatFormat> formats);
 
 inline GLuint gen_vao(std::initializer_list<VaoFloatFormat> attrib_formats) {

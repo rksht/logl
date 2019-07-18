@@ -191,5 +191,6 @@ add_compile_options("-DLOGL_APP_CONFIG_PATH=\"${LOGL_APP_CONFIG_PATH}\"")
 add_subdirectory(scripts)
 add_subdirectory(src)
 add_subdirectory(test)
+add_subdirectory(docs)
 
 message("CMAKE_FLAGS = ${CMAKE_CXX_FLAGS}")

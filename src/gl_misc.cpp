@@ -934,7 +934,7 @@ void load_renderdoc(const char *capture_path_template) {
         INI_STORE_DEFAULT(
             "renderdoc_dll_path", eng::gl().config_ini.string, rdoc_dll_path_str, LOGL_RENDERDOC_DLL_PATH);
         rdoc_dll_path = rdoc_dll_path_str;
-        LOG_F(INFO, "rdoc_dll_path_str =", rdoc_dll_path.c_str());
+        LOG_F(INFO, "rdoc_dll_path_str = %s", rdoc_dll_path.c_str());
     }
     auto pathstr = rdoc_dll_path.u8string();
 

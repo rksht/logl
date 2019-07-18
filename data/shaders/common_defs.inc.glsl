@@ -28,6 +28,7 @@
     layout(binding = binding_point, std140) uniform ublock_name {                                            \
         mat4 u_viewFromWorld;                                                                                \
         mat4 u_clipFromView;                                                                                 \
+        mat4 u_invClipFromView;                                                                              \
         vec4 u_camPosition;                                                                                  \
         vec4 u_camOrientation;                                                                               \
     }

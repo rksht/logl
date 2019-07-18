@@ -100,7 +100,11 @@ namespace app_loop
 
     template <> void update<App>(App &a, ::app_loop::State &s) { glfwPollEvents(); }
 
-    template <> void render<App>(App &a) {}
+    template <> void render<App>(App &a) {
+
+
+        glfwSwapBuffers(eng::gl().window);
+}
 
     template <> void close<App>(App &a) {}
 

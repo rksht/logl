@@ -1,0 +1,9 @@
+// Domain start and end are the same along all 3 axes
+box_domain_start = -4.0
+box_domain_end = 4.0
+
+// Number of samples along each of the 3 axes
+texture_resolution = 256
+
+torus_R = 3.0
+torus_r = 2.0

@@ -86,7 +86,7 @@ namespace fo_ss = fo::string_stream;
 #define CALL_OPERATOR operator()
 #define STD_BEGIN_END(v) std::begin(v), std::end(v)
 
-#define reallyconst static constexpr auto
+#define reallyconst_ static constexpr auto
 
 #define GLOBAL_STORAGE(type, name)                                                                           \
     std::aligned_storage_t<sizeof(type), alignof(type)> global_storage_for_##name[1]
