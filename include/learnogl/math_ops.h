@@ -949,6 +949,16 @@ inline fo::Vector4 transform_plane_ortho(const fo::Matrix4x4 &mat, const fo::Vec
     return mat * plane;
 }
 
+/// A ray. Nothing else.
+struct Ray {
+    fo::Vector3 origin;
+    fo::Vector3 direction;
+
+    static constexpr Ray from_look_at(fo::Vector3 origin, fo::Vector3 target) {
+        return Ray{ origin, normalize(target - origin) };
+    }
+};
+
 // -- Eigenvalue and eigenvector related functions --
 
 /// Returned by `eigensolve_sym3x3`

@@ -70,7 +70,9 @@ inline void pitch(State &e, f32 radians) {
 struct Camera {
     eye::State _eye;
     fo::Matrix4x4 _view_xform; // Needs to be updated everytime camera moves or rotates
+
     fo::Matrix4x4 _proj_xform; // Needs to be updated if viewport dimensions or new/far plane changes
+    fo::Matrix4x4 _inv_proj_xform;  // ^ Ditto
 
     // These properties don't usually change once set
     f32 _near_z;
@@ -79,8 +81,6 @@ struct Camera {
     f32 _y_fov;
     f32 _near_plane_y_extent;
     f32 _far_plane_y_extent;
-
-    bool _needs_update = false;
 
     // ## Getters
 
@@ -95,17 +95,14 @@ struct Camera {
     fo::Vector3 up() const { return eye::up(_eye); }
     fo::Vector3 right() const { return eye::right(_eye); }
 
-    bool needs_update() const { return _needs_update; }
-
-    void set_needs_update(bool b) { _needs_update = b; }
-
     // Define the perspective projection. Note, the vertical fov angle, and height to width ratio is taken as
     // argument.
     void set_proj(f32 zn, f32 zf, f32 y_fov, f32 aspect_h_on_w) {
         _proj_xform = math::perspective_projection(zn, zf, y_fov, 1.0f / aspect_h_on_w);
+        _inv_proj_xform = math::inverse(_proj_xform);
+
         _near_plane_y_extent = zn * std::tan(y_fov * 0.5f);
         _far_plane_y_extent = zf * std::tan(y_fov * 0.5f);
-        set_needs_update(true);
     }
 
     void set_ortho_proj(eng::math::OrthoRange x_source,
@@ -184,6 +181,8 @@ struct Camera {
                  bool orthogonalize_up = true);
 
     void update_view_transform() { eye::update_view_transform(_eye, _view_xform); }
+
+    math::Ray ray_wrt_world(fo::Vector2 pixel_xy);
 };
 
 } // namespace eng

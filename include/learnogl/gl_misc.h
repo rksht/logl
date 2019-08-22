@@ -5,7 +5,6 @@
 
 #include <GLFW/glfw3.h>
 #include <fmt/format.h>
-#include <learnogl/audio.h>
 #include <learnogl/colors.h>
 #include <learnogl/eye.h>
 #include <learnogl/file_monitor.h>
@@ -119,6 +118,9 @@ struct StartGLParams {
     unsigned int major_version = LEARNOGL_GL_MAJOR_VERSION;
     unsigned int minor_version = LEARNOGL_GL_MINOR_VERSION;
     bool gl_forward_compat = false;
+    Vec3 camera_position = Vec3(0, 0, 10);
+    Vec3 camera_look_at = Vec3(0, 0, 0);
+    Vec3 camera_up = math::unit_y;
     const char *window_title = "No window title";
     unsigned int window_width = 1024;
     unsigned int window_height = 768;
@@ -142,14 +144,17 @@ struct GLApp {
     FileMonitor file_monitor;
     // ShapeMeshes shape_meshes;
     // ResourceManager res_man;
-    // SoundManager sound_man;
     RenderManager render_manager;
     FBO default_fbo;
 
     inistorage::Storage config_ini;
 
-    // For all my fixed string needs
+    // For all my fixed string needs.
     FixedStringBuffer fixed_string_buffer;
+
+    Vec2 window_size;
+
+    Camera camera;
 };
 
 /// Returns ref to a global GLApp structure which gets initialized by start_gl by default
@@ -308,5 +313,8 @@ inline std::string glsl_vec_string(const fo::Vector4 &v) {
 }
 
 inline std::string glsl_vec_string(const fo::Vector2 &v) { return fmt::format("vec3({}, {})", v.x, v.y); }
+
+// Computes a ray in world space projected through given pixel
+math::Ray ray_wrt_world(Vec2 pixel_xy);
 
 } // namespace eng

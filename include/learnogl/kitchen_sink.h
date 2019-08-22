@@ -92,7 +92,7 @@ namespace fo_ss = fo::string_stream;
     std::aligned_storage_t<sizeof(type), alignof(type)> global_storage_for_##name[1]
 
 #define GLOBAL_ACCESSOR_FN(type, name, funcname)                                                             \
-    type &funcname() { return *reinterpret_cast<type *>(global_storage_for_##name); }
+    REALLY_INLINE type &funcname() { return *reinterpret_cast<type *>(global_storage_for_##name); }
 
 #if defined(WIN32)
 
@@ -934,4 +934,9 @@ struct Str {
     virtual ~Str() {}
 
     virtual const char *str() const = 0;
+};
+
+struct NamespaceClass {
+  public:
+    NamespaceClass() = delete;
 };

@@ -99,11 +99,10 @@ static void init_caps() {
     CHECK_LE_F(LOGL_MAX_THREADS_PER_GROUP, max_threads_per_group[1]);
 }
 
-std::aligned_storage_t<sizeof(eng::GLApp)> gl_app_storage[1];
-
 namespace eng {
 
-GLApp &gl() { return *reinterpret_cast<GLApp *>(gl_app_storage); }
+GLOBAL_STORAGE(eng::GLApp, gl_app_storage);
+GLOBAL_ACCESSOR_FN(eng::GLApp, gl_app_storage, gl);
 
 struct DebugMessageBuffer {
     DebugCallbackSeverity debug_callback_severity;
@@ -350,6 +349,15 @@ void start_gl(const StartGLParams &params, GLApp &gl_app) {
 
     gl_app.default_fbo.init_from_default_framebuffer();
 
+    gl_app.window_size = Vec2((f32)params.window_width, (f32)params.window_height);
+
+    // Initialize the camera
+    gl_app.camera.look_at(params.camera_position, params.camera_look_at, params.camera_up, true);
+
+    // Store the window size
+    gl_app.camera.set_proj(
+        0.2f, 1000.0f, 70.0f * one_deg_in_rad, gl_app.window_size.x / gl_app.window_size.y);
+
     init_render_manager(gl_app.render_manager);
 
     glClearColor(XYZW(params.clear_color));
@@ -452,7 +460,6 @@ bool handle_eye_input(GLFWwindow *window, eye::State &e, float dt, fo::Matrix4x4
 
 bool handle_camera_input(GLFWwindow *window, eng::Camera &camera, float dt) {
     handle_eye_input(window, camera._eye, dt, camera._view_xform);
-    camera.set_needs_update(true);
 }
 
 bool handle_eye_input_from_callback(GLFWwindow *window,
