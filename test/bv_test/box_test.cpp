@@ -1,5 +1,5 @@
 #include <learnogl/bounding_shapes.h>
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 #include <learnogl/math_ops.h>
 #include <learnogl/pmr_compatible_allocs.h>
 #include <learnogl/rng.h>

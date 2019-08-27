@@ -5,6 +5,7 @@
 #include <learnogl/glsl_inspect.h>
 #include <learnogl/mesh.h>
 #include <learnogl/par_shapes.h>
+#include <learnogl/scene_tree.h>
 
 static const fs::path source_dir = SOURCE_DIR;
 
@@ -23,7 +24,7 @@ struct Geometry {
 
     Geometry() = default;
 
-    fn_ init_from_par_mesh(par_shapes_mesh *pmesh, const char *name)
+    void init_from_par_mesh(par_shapes_mesh *pmesh, const char *name)
     {
         const_ vbo_name = fmt::format("vbo@{}", name);
         const_ ebo_name = fmt::format("ebo@{}", name);
@@ -61,7 +62,7 @@ struct Geometry {
         md.tex2d_offset = sizeof(Vec3) * 2;
     }
 
-    fn_ bind_geometry_buffers(bool bind_vao = true)
+    void bind_geometry_buffers(bool bind_vao = true)
     {
         const_ vb_gluint = eng::gluint_from_globjecthandle(self_.vbo_handle);
         const_ eb_gluint = eng::gluint_from_globjecthandle(self_.ebo_handle);
@@ -188,7 +189,7 @@ struct BasicPipeline {
     }
 
     // Set the shader and the global render states. Blend state is only for
-    fn_ set_shader_and_render_state(u32 color_attachment_number = 0)
+    void set_shader_and_render_state(u32 color_attachment_number = 0)->void
     {
         eng::ShadersToUse use;
         use.vs = self_.vs_handle.rmid();
@@ -211,14 +212,16 @@ struct BasicPipeline {
         // Bind buffer ranges
     }
 
-    fn_ bind_uniform_buffer(eng::UniformBufferHandle ubo_handle,
-                            const std::string &block_name,
-                            bool discard = true)
+    void bind_uniform_buffer(eng::UniformBufferHandle ubo_handle,
+                             const std::string &block_name,
+                             bool discard = true)
+      ->void
     {
         const_ gluint = eng::gluint_from_globjecthandle(ubo_handle);
         glBindBuffer(GL_UNIFORM_BUFFER, gluint);
 
-        const_ &slot_info = ::find_with_end(self_.slot_info_of_data_block, block_name).keyvalue_must().second();
+        const_ &slot_info =
+          ::find_with_end(self_.slot_info_of_data_block, block_name).keyvalue_must().second();
 
         if (discard) {
             glInvalidateBufferData(gluint);
@@ -243,3 +246,76 @@ inline void upload_camera_transform(const eng::CameraTransformUB &camera_transfo
                     sizeof(eng::CameraTransformUB),
                     reinterpret_cast<const void *>(&camera_transforms));
 }
+
+// Stores the data associated with each entity in arrays.
+struct EntityStore {
+    fo::Vector<Geometry> geometries;
+    fo::OrderedMap<eng::StringSymbol, eng::SceneTree::Node *> name_to_node;
+};
+
+struct App {
+    eng::input::BaseHandlerPtr<App> input_handler = eng::input::make_default_handler<App>();
+    var_ &current_input_handler() { return self_.input_handler; }
+
+    EntityStore entity_store;
+
+    eng::FboId default_fbo;
+
+    Geometry torus_geometry;
+
+    BasicPipeline first_try_pip;
+
+    struct UniformBuffers {
+        eng::UniformBufferHandle camera_transforms;
+    };
+
+    UniformBuffers uniform_buffers;
+
+    eng::Camera main_camera;
+
+    void create_meshes()
+    {
+        {
+            var_ pmesh = par_shapes_create_torus(20, 20, 1.0);
+            DEFERSTAT(par_shapes_free_mesh(pmesh));
+            par_shapes_compute_normals(pmesh);
+            torus_geometry.init_from_par_mesh(pmesh, "torus");
+        }
+    }
+
+    void create_camera_uniform_buffer()
+    {
+        eng::BufferCreateInfo ci;
+        ci.bytes = sizeof(eng::CameraTransformUB);
+        ci.flags = eng::BufferCreateBitflags::SET_DYNAMIC_STORAGE;
+        ci.init_data = nullptr;
+        ci.name = "ubo@camera_transform";
+
+        self_.uniform_buffers.camera_transforms = eng::create_uniform_buffer(eng::g_rm(), ci);
+    }
+
+    void create_pipelines()
+    {
+        self_.first_try_pip.init(source_dir / "data/pos_only.vert",
+                                 source_dir / "data/usual_fs.frag",
+                                 eng::g_rm().pos_vao,
+                                 { ResourceSlotInfo::denoting_buffer(0, 0, "CameraTransforms") },
+                                 {});
+
+        eng::RasterizerStateDesc rs_desc = eng::default_rasterizer_state_desc;
+        rs_desc.cull_side = GL_NONE;
+        self_.first_try_pip.rs_state_id = eng::create_rs_state(eng::g_rm(), rs_desc);
+
+        eng::DepthStencilStateDesc ds_desc = eng::default_depth_stencil_desc;
+        self_.first_try_pip.ds_state_id = eng::create_ds_state(eng::g_rm(), ds_desc);
+
+        eng::BlendFunctionDesc blend_desc = eng::default_blendfunc_state;
+        self_.first_try_pip.blend_state_id = eng::create_blendfunc_state(eng::g_rm(), blend_desc);
+    }
+
+    void render()
+    {
+        self_.first_try_pip.set_shader_and_render_state();
+        self_.torus_geometry.bind_geometry_buffers(true);
+    }
+};

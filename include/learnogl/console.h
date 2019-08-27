@@ -10,7 +10,7 @@
 #include <scaffold/collection_types.h>
 #include <scaffold/queue.h>
 #include <learnogl/kitchen_sink.h>
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 #include <learnogl/font.h>
 #include <learnogl/input_handler.h>
 #include <learnogl/gl_binding_state.h>

@@ -4,7 +4,7 @@
 #include "diffuse_irradiance_utils.inc.h"
 
 #include <learnogl/app_loop.h>
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 #include <learnogl/mesh.h>
 
 using namespace eng::math;
@@ -30,7 +30,7 @@ struct App {
 
     eng::Camera main_camera;
 
-    fn_ create_meshes()
+    void create_meshes()
     {
         {
             var_ pmesh = par_shapes_create_torus(20, 20, 1.0);
@@ -40,7 +40,7 @@ struct App {
         }
     }
 
-    fn_ create_camera_uniform_buffer()
+    void create_camera_uniform_buffer()
     {
         eng::BufferCreateInfo ci;
         ci.bytes = sizeof(eng::CameraTransformUB);
@@ -51,7 +51,7 @@ struct App {
         self_.uniform_buffers.camera_transforms = eng::create_uniform_buffer(eng::g_rm(), ci);
     }
 
-    fn_ create_pipelines()
+    void create_pipelines()
     {
         self_.first_try_pip.init(source_dir / "data/pos_only.vert",
                                  source_dir / "data/usual_fs.frag",
@@ -70,7 +70,7 @@ struct App {
         self_.first_try_pip.blend_state_id = eng::create_blendfunc_state(eng::g_rm(), blend_desc);
     }
 
-    fn_ render()
+    void render()
     {
         self_.first_try_pip.set_shader_and_render_state();
         self_.torus_geometry.bind_geometry_buffers(true);
@@ -98,7 +98,9 @@ namespace app_loop
         a.main_camera.look_at(eng::math::zero_3, Vec3(0, 0, 1.0), eng::math::unit_y);
     }
 
-    template <> void update<App>(App &a, ::app_loop::State &s) { glfwPollEvents(); }
+    template <> void update<App>(App &a, ::app_loop::State &s) {
+        glfwPollEvents();
+    }
 
     template <> void render<App>(App &a) {
 

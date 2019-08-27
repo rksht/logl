@@ -1,18 +1,21 @@
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 
 #include <duk_console.h>
 #include <duktape.h>
 
 #include <scaffold/timed_block.h>
 
-static void push_file_as_string(duk_context *duk, const fs::path &file_path) {
+static void push_file_as_string(duk_context *duk, const fs::path &file_path)
+{
     fo::Array<char> text;
     read_file(file_path, text, true);
     duk_push_string(duk, fo::data(text));
 }
 
-const char *str_duk_type(duk_int_t type) {
-    switch (type) {
+const char *str_duk_type(duk_int_t type)
+{
+    switch (type)
+    {
     case (DUK_TYPE_NONE):
         return "DUK_TYPE_NONE";
     case (DUK_TYPE_UNDEFINED):
@@ -39,14 +42,17 @@ const char *str_duk_type(duk_int_t type) {
     }
 }
 
-static bool get_duk_qualified_variable(duk_context *duk, const std::vector<std::string> &qualified_name) {
+static bool get_duk_qualified_variable(duk_context *duk, const std::vector<std::string> &qualified_name)
+{
     duk_push_global_object(duk);
 
     const int n = (int)qualified_name.size();
 
-    for (int i = 1; i <= n; ++i) {
+    for (int i = 1; i <= n; ++i)
+    {
         int exists = duk_get_prop_string(duk, -1, qualified_name[i - 1].c_str());
-        if (!exists) {
+        if (!exists)
+        {
             LOG_F(ERROR, "Qualified variable does not exist");
             duk_copy(duk, -1, -(i + 1));
             duk_set_top(duk, -(i + 1));
@@ -63,13 +69,15 @@ static bool get_duk_qualified_variable(duk_context *duk, const std::vector<std::
 // Constructs a new duktape object. If there is an error, returns false, otherwise returns true. On error, the
 // stack is unmodified. On success, the newly constructed object resides on top.
 static bool new_global_duk_object(duk_context *duk,
-                                  const std::vector<std::string> &qualified_ctor_name,
-                                  const std::vector<double> &arguments,
-                                  const char *global_variable_name) {
+                  const std::vector<std::string> &qualified_ctor_name,
+                  const std::vector<double> &arguments,
+                  const char *global_variable_name)
+{
 
     int exists = get_duk_qualified_variable(duk, qualified_ctor_name);
 
-    if (!exists) {
+    if (!exists)
+    {
         return false;
     }
 
@@ -79,7 +87,8 @@ static bool new_global_duk_object(duk_context *duk,
           duk_is_function(duk, -1) ? "yes" : "no");
 
     // Push each argument
-    for (double a : arguments) {
+    for (double a : arguments)
+    {
         duk_push_number(duk, a);
     }
 
@@ -104,9 +113,10 @@ static bool new_global_duk_object(duk_context *duk,
 
 // Calls the duktape method on an object that should be on top of stack.
 static bool call_duk_method(duk_context *duk,
-                            const char *variable_name,
-                            const char *method_name,
-                            const std::vector<double> &args) {
+                const char *variable_name,
+                const char *method_name,
+                const std::vector<double> &args)
+{
 
     duk_push_global_object(duk);
     duk_get_prop_string(duk, -1, variable_name);
@@ -117,15 +127,19 @@ static bool call_duk_method(duk_context *duk,
           str_duk_type(duk_get_type(duk, -1)),
           duk_is_string(duk, -1) ? "yes" : "no");
 
-    for (auto &a : args) {
+    for (auto &a : args)
+    {
         duk_push_number(duk, a);
     }
 
     int ret = duk_pcall_prop(duk, -((i32)args.size() + 2), (i32)args.size());
-    if (ret != 0) {
+    if (ret != 0)
+    {
         LOG_F(ERROR, "Duktape error - %s", duk_safe_to_string(duk, -1));
         duk_pop_n(duk, 1);
-    } else {
+    }
+    else
+    {
         CHECK_EQ_F(duk_get_type(duk, -1), DUK_TYPE_NUMBER);
         double result = duk_get_number(duk, -1);
         LOG_F(INFO, "Result = %f", result);
@@ -134,7 +148,8 @@ static bool call_duk_method(duk_context *duk,
     return ret == 0;
 }
 
-int main() {
+int main()
+{
     eng::init_memory();
     DEFERSTAT(eng::shutdown_memory());
 

@@ -954,8 +954,12 @@ struct Ray {
     fo::Vector3 origin;
     fo::Vector3 direction;
 
-    static constexpr Ray from_look_at(fo::Vector3 origin, fo::Vector3 target) {
-        return Ray{ origin, normalize(target - origin) };
+    constexpr Ray(fo::Vector3 origin, fo::Vector3 direction)
+        : origin(origin)
+        , direction(direction) {}
+
+    static inline Ray from_look_at(fo::Vector3 origin, fo::Vector3 target) {
+        return Ray(origin, normalize(target - origin));
     }
 };
 
@@ -1013,7 +1017,7 @@ struct LocalTransform {
         m = xyz_scale_matrix(one_3 / scale) * m;
     }
 
-    static LocalTransform identity() { return LocalTransform{ one_3, identity_versor, zero1_4 }; }
+    static LocalTransform identity() { return LocalTransform{ one_3, identity_versor, fo::Vector3::zero() }; }
 };
 
 } // namespace math

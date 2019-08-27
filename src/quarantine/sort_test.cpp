@@ -1,7 +1,7 @@
 // The sorting test from fluidcs11, just in case I need to test it later.
 
 #include <learnogl/app_loop.h>
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng.h>
 
 #include <learnogl/bitonic_sort.h>
 

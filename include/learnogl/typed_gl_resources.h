@@ -903,10 +903,11 @@ struct SourceToBufferExtraInfo {
     const void *source_bytes;
     u32 num_bytes;
     u32 byte_offset;
-    bool discard;
+    bool discard; // Think D3D's "MAP_DISCARD"
 
     static constexpr u32 COPY_FULL = 0;
 
+    // Makes an info which tells source_to_***_buffer to discard the currently stored data.
     static constexpr SourceToBufferExtraInfo
     after_discard(const void *source_bytes, u32 byte_offset, u32 num_bytes = COPY_FULL) {
         SourceToBufferExtraInfo info = {};
@@ -918,6 +919,7 @@ struct SourceToBufferExtraInfo {
         return info;
     }
 
+    // Opposite of above.
     static constexpr SourceToBufferExtraInfo
     dont_discard(const void *source_bytes, u32 byte_offset, u32 num_bytes = COPY_FULL) {
         SourceToBufferExtraInfo info = {};

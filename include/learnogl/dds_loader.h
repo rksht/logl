@@ -1,7 +1,7 @@
 // Based on OpenGL Redbook accompanied code
 #pragma once
 
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng.h>
 #include <scaffold/memory.h>
 
 namespace dds {

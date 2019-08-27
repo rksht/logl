@@ -21,7 +21,7 @@ atlas_height = 256
 #include <learnogl/bounding_shapes.h>
 #include <learnogl/eye.h>
 #include <learnogl/fps.h>
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 #include <learnogl/math_ops.h>
 #include <learnogl/mesh.h>
 #include <learnogl/kitchen_sink.h>

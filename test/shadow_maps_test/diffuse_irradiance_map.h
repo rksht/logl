@@ -1,6 +1,6 @@
 #pragma once
 
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng.h>
 
 struct Material {
     Vec3 albedo;

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <learnogl/essential_headers.h>
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 #include <learnogl/shader.h>
 
 #include <scaffold/math_types.h>

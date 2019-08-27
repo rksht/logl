@@ -3,7 +3,7 @@
 // attributeless rendering. In this I will also incorporate ImGui.
 
 #include <learnogl/imgui_glfw.h>
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 #include <learnogl/nf_simple.h>
 
 #define TTF_FILE_PATH LOGL_UI_FONT

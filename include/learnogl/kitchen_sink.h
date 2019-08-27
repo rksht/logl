@@ -74,6 +74,7 @@ namespace fo_ss = fo::string_stream;
 #define const_ const auto
 #define var_ auto
 #define lam_ [&]
+#define sca_ static constexpr auto
 
 #define DONT_KEEP_INLINED inline
 #define FUNC_PTR(function_name) std::add_pointer_t<decltype(function_name)>
@@ -87,6 +88,8 @@ namespace fo_ss = fo::string_stream;
 #define STD_BEGIN_END(v) std::begin(v), std::end(v)
 
 #define reallyconst_ static constexpr auto
+
+template <typename T> using Ref = std::reference_wrapper<T>;
 
 #define GLOBAL_STORAGE(type, name)                                                                           \
     std::aligned_storage_t<sizeof(type), alignof(type)> global_storage_for_##name[1]
@@ -185,10 +188,10 @@ template <typename T> std::vector<T> read_structs_into_vector(const fs::path &fi
 
 /// Reads a file into the given array. By default `make_cstring` is true, and a
 /// null terminator is appended after the file is read.
-void read_file(const fs::path &path, fo::Array<u8> &arr, bool make_cstring = false);
-void read_file(const fs::path &path, fo::Array<i8> &arr, bool make_cstring = true);
-void read_file(const fs::path &path, fo::Array<char> &arr,
-               bool make_cstring = true); // char != signed char
+bool read_file(const fs::path &path, fo::Array<u8> &arr, bool make_cstring = false, bool abort_on_error = true);
+bool read_file(const fs::path &path, fo::Array<i8> &arr, bool make_cstring = true, bool abort_on_error = true);
+bool read_file(const fs::path &path, fo::Array<char> &arr,
+               bool make_cstring = true, bool abort_on_error = true); // char != signed char
 
 char *read_file(const fs::path &path, fo::Allocator &a, u32 &size_out, bool make_cstring = false);
 

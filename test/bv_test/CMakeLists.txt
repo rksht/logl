@@ -68,3 +68,6 @@ target_link_libraries(raycast_2 learnogl)
 
 add_executable(once_block_test once_block_test.cpp)
 target_link_libraries(once_block_test learnogl)
+
+add_executable(duk_modules_test duk_modules_test.cpp duk_helper.h duk_helper.cpp)
+target_link_libraries(duk_modules_test learnogl duktape_lib)

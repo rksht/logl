@@ -24,7 +24,7 @@
 #include <GLFW/glfw3native.h>
 
 #include <learnogl/callstack.h>
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng.h>
 #include <learnogl/math_ops.h>
 #include <learnogl/par_shapes.h>
 #include <learnogl/renderdoc_app.h>
@@ -101,8 +101,12 @@ static void init_caps() {
 
 namespace eng {
 
-GLOBAL_STORAGE(eng::GLApp, gl_app_storage);
-GLOBAL_ACCESSOR_FN(eng::GLApp, gl_app_storage, gl);
+GLApp::GLApp(u32 scene_tree_node_pool_size)
+    : scene_tree(scene_tree_node_pool_size) {}
+
+std::aligned_storage_t<sizeof(GLApp)> _gl_storage[1];
+
+GLApp &gl() { return *reinterpret_cast<GLApp *>(_gl_storage); }
 
 struct DebugMessageBuffer {
     DebugCallbackSeverity debug_callback_severity;
@@ -247,7 +251,7 @@ TU_LOCAL void init_shape_mesh_struct(ShapeMeshes &shape_meshes);
 TU_LOCAL void dont_load_renderdoc();
 
 // Fwd
-TU_LOCAL void load_app_config();
+TU_LOCAL void load_app_config(inistorage::Storage &config_ini);
 
 void start_gl(const StartGLParams &params, GLApp &gl_app) {
     CHECK_EQ_F(&gl_app, &gl());
@@ -311,12 +315,18 @@ void start_gl(const StartGLParams &params, GLApp &gl_app) {
         enable_debug_output(nullptr, nullptr, params.abort_on_error, params.debug_callback_severity);
     }
 
+    inistorage::Storage config_ini;
+    load_app_config(config_ini);
+
+    u32 scene_node_pool_size = 0;
+    INI_STORE_DEFAULT("scene_node_pool_size", config_ini.boolean, scene_node_pool_size, 100);
+
     // Ctor the GLApp struct
-    new (&gl_app) GLApp;
+    new (&gl_app) GLApp(scene_node_pool_size);
+
+    gl_app.config_ini = std::move(config_ini);
 
     gl_app.window = window;
-
-    load_app_config();
 
     if (params.load_renderdoc) {
         load_renderdoc(params.rdoc_capture_template);
@@ -897,8 +907,8 @@ void init_shape_mesh_struct(ShapeMeshes &shape_meshes) {
     shape_meshes.pos2d_vao = g_bs().pos2d_vao;
 }
 
-// Loads the app config it it points to a non-empty path
-TU_LOCAL void load_app_config() {
+// Loads the app config it points to a non-empty path
+TU_LOCAL void load_app_config(inistorage::Storage &config_ini) {
 #if !defined(LOGL_APP_CONFIG_PATH)
     return;
 #endif
@@ -908,7 +918,7 @@ TU_LOCAL void load_app_config() {
 
     CHECK_F(fs::exists(path), "App config file - %s - doesn't exist", path_u8string.c_str());
 
-    gl().config_ini.init_from_file(path);
+    config_ini.init_from_file(path);
 }
 
 } // namespace eng

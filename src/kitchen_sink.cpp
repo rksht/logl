@@ -15,18 +15,32 @@ void print_matrix_classic(const char *name, const fo::Matrix4x4 &m) {
     log_info("Matrix %s = \n%s\n-----\n", name, string_stream::c_str(b));
 }
 
-template <typename T> void read_file_T(const fs::path &path, fo::Array<T> &arr, bool make_cstring) {
+template <typename T>
+static bool read_file_T(const fs::path &path, fo::Array<T> &arr, bool make_cstring, bool abort_on_error) {
     static_assert(std::is_same_v<T, u8> || std::is_same_v<T, i8> || std::is_same_v<T, char>, "");
 
     auto path_str8 = path.generic_u8string();
 
     if (!fs::exists(path)) {
+        LOG_F(ERROR, "File: %s doesn't exist", path_str8.c_str());
         eng::print_callstack();
-        CHECK_F(fs::exists(path), "File: %s does not exist", path_str8.c_str());
+
+        if (!abort_on_error) {
+            return false;
+        }
+
+        ABORT_F("abort");
     }
 
     FILE *f = fopen(path_str8.c_str(), u8"rb");
-    CHECK_NE_F(f, nullptr, "Unexpected error - could not open file %s", path.c_str());
+
+    if (!f) {
+        LOG_F(ERROR, "Unexpected error - could not open file %s", path.c_str());
+        if (!abort_on_error) {
+            return false;
+        }
+        ABORT_F("...abort");
+    }
 
     const size_t size = fs::file_size(path);
 
@@ -34,25 +48,34 @@ template <typename T> void read_file_T(const fs::path &path, fo::Array<T> &arr, 
     resize(arr, size);
 
     size_t read_count = fread(data(arr), 1, size, f);
-    CHECK_EQ_F(read_count, size, "Failed to read full file: %s", path_str8.c_str());
+
+    if (read_count != size) {
+        LOG_F(ERROR, "Failed to read full file: %s", path_str8.c_str());
+
+        if (!abort_on_error) {
+            return false;
+        }
+    }
 
     fclose(f);
 
     if (make_cstring) {
         push_back(arr, T('\0'));
     }
+
+    return true;
 }
 
-void read_file(const fs::path &path, fo::Array<u8> &arr, bool make_cstring) {
-    read_file_T(path, arr, make_cstring);
+bool read_file(const fs::path &path, fo::Array<u8> &arr, bool make_cstring, bool abort_on_error) {
+    return read_file_T(path, arr, make_cstring, abort_on_error);
 }
 
-void read_file(const fs::path &path, fo::Array<i8> &arr, bool make_cstring) {
-    read_file_T(path, arr, make_cstring);
+bool read_file(const fs::path &path, fo::Array<i8> &arr, bool make_cstring, bool abort_on_error) {
+    return read_file_T(path, arr, make_cstring, abort_on_error);
 }
 
-void read_file(const fs::path &path, fo::Array<char> &arr, bool make_cstring) {
-    read_file_T(path, arr, make_cstring);
+bool read_file(const fs::path &path, fo::Array<char> &arr, bool make_cstring, bool abort_on_error) {
+    return read_file_T(path, arr, make_cstring, abort_on_error);
 }
 
 char *read_file(const fs::path &path, fo::Allocator &a, u32 &size_out, bool make_cstring) {
@@ -163,7 +186,10 @@ void str_of_matrix(const fo::Matrix4x4 &mat, fo::string_stream::Buffer &b, bool 
     }
 }
 
-u32 split_string(const char *in, char split_char, Vector<string_stream::Buffer> &out, fo::Allocator &sub_string_allocator) {
+u32 split_string(const char *in,
+                 char split_char,
+                 Vector<string_stream::Buffer> &out,
+                 fo::Allocator &sub_string_allocator) {
     using namespace string_stream;
 
     u32 i = 0;

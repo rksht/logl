@@ -4,7 +4,7 @@
 
 #include <learnogl/app_loop.h>
 #include <learnogl/colors.h>
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 #include <learnogl/stopwatch.h>
 #include <thread>
 

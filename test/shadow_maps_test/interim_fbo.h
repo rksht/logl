@@ -1,6 +1,6 @@
 #pragma once
 
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 
 #include <learnogl/glsl_inspect.h>
 #include <learnogl/render_utils.h>

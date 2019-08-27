@@ -1,5 +1,5 @@
 #pragma once
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 
 #include <scaffold/vector.h>
 #include <learnogl/rng.h>

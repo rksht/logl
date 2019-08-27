@@ -1,6 +1,6 @@
 #pragma once
 
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 
 #include <learnogl/app_loop.h>
 #include <learnogl/bounding_shapes.h>

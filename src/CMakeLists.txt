@@ -17,7 +17,7 @@ set(header_files_relative
     # audio.h
     app_loop.h
     bitonic_sort.h
-    gl_misc.h
+    eng
     essential_headers.h
     start.h
     kitchen_sink.h
@@ -54,22 +54,20 @@ set(header_files_relative
     file_monitor.h
     stb_truetype.h
     stb_rect_pack.h
-    # console.h
     font.h
-    # chai_definitions.h
-    input_handler.h)
+    input_handler.h
+    scene_tree.h)
 
 ex_prepend_to_each("${header_files_relative}" "${header_dir}/" header_paths)
 
 set(source_files
     one_header_libs.cpp
     eye.cpp
-    gl_misc.cpp
+    eng
     mesh.cpp
     callstack.cpp
     gl_binding_state.cpp
     shader.cpp
-    # audio.cpp
     pmr_compatible_allocs.cpp
     bounding_shapes.cpp
     rng.cpp
@@ -80,7 +78,6 @@ set(source_files
     fixed_string_buffer.cpp
     glsl_inspect.cpp
     render_utils.cpp
-    # resource.cpp
     par_shapes.cpp
     kitchen_sink.cpp
     nf_simple.cpp
@@ -92,9 +89,10 @@ set(source_files
     dds_loader_impl.cpp
     string_table.cpp
     file_monitor.cpp
-    # console.cpp
     font.cpp
-    ${header_paths})
+    ${header_paths}
+    scene_tree.cpp
+    )
 
 include_directories(${third_party_include_dirs})
 include_directories(${PROJECT_SOURCE_DIR}/include)

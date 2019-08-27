@@ -1,7 +1,7 @@
 // A copy of defer_light_test but testing my typed_gl_resources_abstraction.
 
 #include <learnogl/app_loop.h>
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 
 #include <learnogl/bounding_shapes.h>
 #include <learnogl/intersection_test.h>

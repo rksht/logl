@@ -1,6 +1,6 @@
 #pragma once
 
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 #include <scaffold/pool_allocator.h>
 
 // Don't need this.

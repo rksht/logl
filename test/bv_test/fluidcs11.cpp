@@ -3,7 +3,7 @@
 #include <learnogl/nf_simple.h>
 
 #include <learnogl/app_loop.h>
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 
 #include <learnogl/bitonic_sort.h>
 #include <scaffold/ordered_map.h>

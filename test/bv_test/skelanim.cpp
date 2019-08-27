@@ -1,6 +1,6 @@
 // Testing skinned mesh loading and playing skeletal animation
 
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 
 using namespace eng;
 

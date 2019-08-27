@@ -2,7 +2,7 @@
 
 #include "b2d_tryout_meshes.inc.h"
 
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 
 #include <learnogl/font.h>
 #include <learnogl/nf_simple.h>

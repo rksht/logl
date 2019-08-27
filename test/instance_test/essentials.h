@@ -6,7 +6,7 @@
 #include <cwd.h>
 #include <learnogl/app_loop.h>
 #include <learnogl/eye.h>
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 #include <learnogl/math_ops.h>
 #include <learnogl/kitchen_sink.h>
 #include <learnogl/nf_simple.h>

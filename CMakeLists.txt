@@ -52,6 +52,7 @@ add_subdirectory(third/glad)
 add_subdirectory(third/glad_compat)
 add_subdirectory(third/halpern_pmr)
 
+if (false)
 if(${LOGL_USE_CPP_17})
   message("LOGL_USE_CPP_17 = ${LOGL_USE_CPP_17}")
   if (gcc_or_clang)
@@ -61,6 +62,13 @@ if(${LOGL_USE_CPP_17})
     message("msvc = ${gcc_or_clang}")
     add_compile_options(-std:c++17)
   endif()
+endif()
+endif()
+
+if(${LOGL_USE_CPP_17})
+  set(CMAKE_CXX_STANDARD 17)
+else()
+  set(CMAKE_CXX_STANDARD 14)
 endif()
 
 if(LOGL_USE_AVX)
@@ -94,7 +102,7 @@ set(SHADERC_SKIP_INSTALL ON CACHE BOOL "Disable installing shaderc")
 add_subdirectory(third/shaderc/src)
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS false)
 
-# add_subdirectory(third/duktape)
+add_subdirectory(third/duktape)
 
 # Third party include dirs
 set(rel_include_dirs
@@ -115,7 +123,7 @@ set(rel_include_dirs
     "loguru"
     "cxx-prettyprint"
     # "anttweakbar_msvc_cmake/include"
-    # "duktape"
+    "duktape"
     # "liquidfun/liquidfun/Box2D"
 )
 

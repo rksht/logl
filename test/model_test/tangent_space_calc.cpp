@@ -107,7 +107,7 @@ static constexpr auto fs_quad = R"(
 )";
 
 #include <learnogl/app_loop.h>
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 #include <learnogl/math_ops.h>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION

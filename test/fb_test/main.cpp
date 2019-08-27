@@ -3,7 +3,7 @@
 // using imgui a little. Shader subroutines are a bit awkward though.
 
 #include <learnogl/app_loop.h>
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 #include <learnogl/math_ops.h>
 #include <learnogl/mesh.h>
 #include <learnogl/kitchen_sink.h>

@@ -8,7 +8,7 @@
 
 #include <learnogl/start.h>
 
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 
 #include <learnogl/mesh.h>
 #include <learnogl/random_sampling.h>

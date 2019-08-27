@@ -1,5 +1,5 @@
 #include <learnogl/dds_loader.h>
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng.h>
 #include <learnogl/shader.h>
 #include <learnogl/stb_image.h>
 #include <learnogl/typed_gl_resources.h>

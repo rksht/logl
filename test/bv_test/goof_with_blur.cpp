@@ -1,4 +1,4 @@
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 
 #include "gaussian_blur_utils.h"
 

@@ -1,7 +1,7 @@
 #include "dbg_imgui.h"
 
 #include <glad/glad.h>
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 #include <learnogl/math_ops.h>
 #include <scaffold/debug.h>
 #include <scaffold/memory.h>

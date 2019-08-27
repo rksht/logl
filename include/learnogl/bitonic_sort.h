@@ -1,7 +1,7 @@
 #pragma once
 
 #include <learnogl/gl_binding_state.h>
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 
 #include <array>
 

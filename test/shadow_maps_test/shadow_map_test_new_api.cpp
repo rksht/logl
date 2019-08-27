@@ -1,4 +1,4 @@
-#include <learnogl/gl_misc.h>
+#include <learnogl/eng>
 
 #include <cxx_prettyprint.hpp>
 #include <halpern_pmr/pmr_map.h>
@@ -798,7 +798,7 @@ void read_bindpoints_from_programs(App &app)
 {
     // Get the bindpoint of resources from shader.
     fn_ read_bindpoints_for_program = [&](const eng::ShaderProgramHandle &shader_program,
-                                                 BindpointsInProgram &bindpoints_out) {
+                                          BindpointsInProgram &bindpoints_out) {
         fo_ss::Buffer shader_sources =
           eng::get_shaders_used_by_program(eng::g_rm(), shader_program).source_paths_as_string(eng::g_rm());
 

@@ -16,6 +16,7 @@
 #include <learnogl/pmr_compatible_allocs.h>
 #include <learnogl/resource.h>
 #include <learnogl/rng.h>
+#include <learnogl/scene_tree.h>
 #include <learnogl/shader.h>
 #include <learnogl/string_table.h>
 #include <learnogl/typed_gl_resources.h>
@@ -152,9 +153,13 @@ struct GLApp {
     // For all my fixed string needs.
     FixedStringBuffer fixed_string_buffer;
 
+    SceneTree scene_tree;
+
     Vec2 window_size;
 
     Camera camera;
+
+    GLApp(u32 scene_tree_node_pool_size);
 };
 
 /// Returns ref to a global GLApp structure which gets initialized by start_gl by default
