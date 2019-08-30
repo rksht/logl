@@ -1,5 +1,7 @@
 // Trying out how I would expressively want to build a shader program.
 
+const type = require("type_check");
+
 var DIM_1D = 0;
 var DIM_2D = 1;
 var DIM_3D = 2;
@@ -19,10 +21,29 @@ function make_sampler_info(dims, type, name) {
 	return { dims: dims, type: type, name: name };
 }
 
-function BlockInfo(bindpoint, layout_format) {
-	this.bindpoint = bindpoint;
-	this.layout_format = layout_format;
+// Represents the vertex input layout of a vertex shader
+function VSInputLayout(auto_assign_locations = true) {
+	this.names = [];
+	this.locations = [];
+	this.auto_assign_locations = auto_assign_locations;
 }
+
+VsInputLayout.prototype.add_input = function(type_name, name, location) {
+	if (!location && !auto_assign_locations) {
+		throw "Location needs to be given";
+	}
+
+	if (!location && this.auto_assign_locations) {
+		location = this.locations.length;
+	}
+
+	this.names.push({
+		type_name: type_name,
+		name: name,
+		location: location
+	});
+	this.locations.push(location);
+};
 
 function Member(type_name, member_name) {
 	this.type_name = type_name;
@@ -98,6 +119,8 @@ function ShaderBuilder(shader_include_paths) {
 	this.storage_blocks_by_name = {};
 	this.texture_samplers_by_name = {};
 }
+
+const VertexShaderInfo = {};
 
 ShaderBuilder.prototype.add_vertex_shader = function(vs_source, debug_name) {
 	if (!vs_source) {

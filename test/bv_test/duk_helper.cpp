@@ -50,7 +50,7 @@ TU_LOCAL WrappedDukContext *get_wrapped_context_from_global(duk_context *ctx)
 }
 
 // The Duktape.modSearch function
-static duk_int_t my_mod_search(duk_context *ctx)
+static duk_ret_t my_mod_search(duk_context *ctx)
 {
     // args are (id, require, exports, module)
     CHECK_EQ_F(duk_get_top(ctx), 4);
@@ -409,6 +409,8 @@ void WrappedDukContext::init()
     duk_pop(_context);
 
     LOG_F(INFO, "Initialized duktape context");
+
+    add_module_path(LOGL_JS_MODULES_DIR);
 }
 
 void WrappedDukContext::push_source_file(const fs::path &path)
