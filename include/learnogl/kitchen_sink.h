@@ -831,10 +831,32 @@ template <typename T> struct NulledOnDtorPtr {
     operator bool() const { return _p != nullptr; }
 };
 
+template <typename ObjectType> struct DeleterForAllocator {
+    DeleterForAllocator(fo::Allocator &allocator)
+        : _allocator(&allocator) {}
+
+    void operator()(ObjectType *p) {
+        fo::make_delete(_allocator, p);
+    }
+
+    fo::Allocator *_allocator;
+
+    // @@copassmov default
+};
+
+template <typename ObjectType, typename ... Args>
+auto allocate_unique(fo::Allocator &allocator, Args &&... ctor_args) {
+    auto p = fo::make_new<ObjectType>(allocator, std::forward<Args>(ctor_args)...);
+    using deleter_type = DeleterForAllocator<ObjectType>;
+    return std::unique_ptr<ObjectType, deleter_type>(p, DeleterForAllocator<ObjectType>(allocator));
+}
+
+// @@nonapi
 template <typename ObjectType> void scratch_allocator_deleter(ObjectType *p) {
     fo::make_delete(fo::memory_globals::default_scratch_allocator(), p);
 }
 
+// @@nonapi
 template <typename ObjectType> void default_allocator_deleter(ObjectType *p) {
     fo::make_delete(fo::memory_globals::default_allocator(), p);
 }

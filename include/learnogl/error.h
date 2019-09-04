@@ -11,5 +11,8 @@ struct Error {
     Error(const char *error_string = nullptr);
     const char *to_string() const;
 
+    // Just to make it clear, passing `nullptr` denotes "no error".
+    static Error ok() { return Error(nullptr); }
+
     operator bool() const { return fo::size(_ss) == 0; }
 };

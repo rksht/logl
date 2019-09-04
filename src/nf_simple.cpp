@@ -189,6 +189,48 @@ void Storage::init_from_file(const fs::path &path, bool keep_config_data) {
     _initialized = true;
 }
 
+// TODO
+#if 0
+const char *Storage::init_from_args(int ac, char **av)
+{
+
+    if (_initialized)
+    {
+        _map.clear();
+        _initialized = false;
+        if (_cd) {
+            nfcd_free(_cd);
+        }
+    }
+
+
+    _cd = nfcd_make(simple_nf_realloc, nullptr, 0, 0);
+
+    fo::TempAllocator1024 ta;
+    fo::Vector<fo_ss::Buffer> qualified_name(ta);
+    fo::reserve(qualified_name, 20);
+
+    const auto find_sub_object = [&]() {
+
+    }
+
+    for (int i = 1; i < ac; ++i)
+    {
+        const int len = strlen(av[i]);
+
+        fo_ss::Buffer sub_name(ta);
+        fo::reserve(sub_name, len + 1);
+
+        for (int c = 0; c < len; ++c) {
+            if (c[i] == 0 && c == 0) {
+
+            }
+        }
+    }
+}
+
+#endif
+
 } // namespace inistorage
 
 TU_LOCAL void recurse_object(nfcd_ConfigData *cd, fo::string_stream::Buffer &ss, nfcd_loc loc) {

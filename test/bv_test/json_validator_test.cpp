@@ -15,10 +15,7 @@ int main() {
     }
     )";
 
-    auto cd = simple_parse_cstr(source_1, true);
-    DEFERSTAT(nfcd_free(cd));
+    const auto spec = R"(
 
-    using Validator =
-        StructValidator<StringValidator, SignedIntegerValidator, ArrayValidator<DoubleValidator>>;
-    assert(Validator::validate(cd, nfcd_root(cd)));
+    )";
 }
