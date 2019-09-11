@@ -1,24 +1,20 @@
 #include <learnogl/kitchen_sink.h>
 #include <learnogl/nf_simple.h>
 
-using namespace json_schema;
-
-int main() {
+int main(int ac, char **av)
+{
     fo::memory_globals::init();
     DEFERSTAT(fo::memory_globals::shutdown());
 
-    const auto source_1 = R"(
+    inistorage::Storage arg_store;
+    auto error = arg_store.init_from_args(ac, av);
+
+    if (error)
     {
-        nick = "rksht"
-        age = 24
-        high_scores = [90.70, 70.80, 91.50]
+        ABORT_F("%s", error.to_string());
     }
-    )";
 
-    auto cd = simple_parse_cstr(source_1, true);
-    DEFERSTAT(nfcd_free(cd));
+    auto ss = stringify_nfcd(arg_store.cd());
 
-    using Validator =
-        StructValidator<StringValidator, SignedIntegerValidator, ArrayValidator<DoubleValidator>>;
-    assert(Validator::validate(cd, nfcd_root(cd)));
+    LOG_F(INFO, "Args = %s", fo_ss::c_str(ss));
 }

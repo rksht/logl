@@ -115,6 +115,8 @@ struct DebugCallbackSeverity {
 };
 
 struct StartGLParams {
+    int ac = 0;
+    char **av = nullptr;
     unsigned int msaa_samples = 4;
     unsigned int major_version = LEARNOGL_GL_MAJOR_VERSION;
     unsigned int minor_version = LEARNOGL_GL_MINOR_VERSION;
