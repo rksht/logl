@@ -55,6 +55,7 @@ set(header_files_relative
     stb_truetype.h
     stb_rect_pack.h
     font.h
+    error.h
     input_handler.h
     scene_tree.h)
 
@@ -90,6 +91,7 @@ set(source_files
     string_table.cpp
     file_monitor.cpp
     font.cpp
+    error.cpp
     ${header_paths}
     scene_tree.cpp
     )

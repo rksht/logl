@@ -1,10 +1,12 @@
 #include <learnogl/nf_simple.h>
 #include <scaffold/array.h>
 #include <scaffold/memory.h>
+#include <scaffold/scanner.h>
 
 #include <fmt/format.h>
 
 #include <mutex> // once_flag
+#include <string>
 
 void *simple_nf_realloc(
     void *user_data, void *prev_pointer, int orig_size, int new_size, const char *file, int line) {
@@ -189,47 +191,309 @@ void Storage::init_from_file(const fs::path &path, bool keep_config_data) {
     _initialized = true;
 }
 
-// TODO
-#if 0
-const char *Storage::init_from_args(int ac, char **av)
-{
+struct ArgumentParser {
+    fo::TempAllocator<1024> _temp_object_allocator;
+    scanner::Scanner _sc;
 
-    if (_initialized)
-    {
-        _map.clear();
-        _initialized = false;
-        if (_cd) {
-            nfcd_free(_cd);
-        }
-    }
+    int _arg_number = 0;
+    const char *_argument = nullptr;
 
+    nfcd_ConfigData *_cd = nullptr;
 
-    _cd = nfcd_make(simple_nf_realloc, nullptr, 0, 0);
+    struct TempObject;
+    using TempValue = VariantTable<nfcd_loc, TempObject *>;
 
-    fo::TempAllocator1024 ta;
-    fo::Vector<fo_ss::Buffer> qualified_name(ta);
-    fo::reserve(qualified_name, 20);
+    struct TempObject {
+        fo::OrderedMap<std::string, TempValue> m;
+    };
 
-    const auto find_sub_object = [&]() {
+    TempObject *_root;
 
-    }
+    // Current argument
+    int _ac;
+    char **_av;
 
-    for (int i = 1; i < ac; ++i)
-    {
-        const int len = strlen(av[i]);
+    void _delete_temp_object(TempObject *root) {
+        for (auto &e : root->m) {
+            auto &mapped_value = e.second();
 
-        fo_ss::Buffer sub_name(ta);
-        fo::reserve(sub_name, len + 1);
-
-        for (int c = 0; c < len; ++c) {
-            if (c[i] == 0 && c == 0) {
-
+            if (mapped_value.contains_subtype<TempObject *>()) {
+                _delete_temp_object(mapped_value.get_value<TempObject *>());
             }
         }
+        root->~TempObject();
     }
-}
+
+    ArgumentParser(int ac, char **av)
+        : _sc()
+        , _ac(ac)
+        , _av(av) {
+        // scanner::init_from_cstring(_sc, argument);
+        _root = fo::make_new<TempObject>(_temp_object_allocator);
+    }
+
+    ~ArgumentParser() {
+        if (_root) {
+            _delete_temp_object(_root);
+        }
+    }
+
+#if 0
+    void dump_temp(TempValue root, fo_ss::Buffer &ss) {
+        if (root.contains_subtype<nfcd_loc>()) {
+            ss = stringify_nfcd(_cd, root.get_value<nfcd_loc>(), std::move(ss));
+        } else {
+            ss << "{";
+
+            auto temp_object = root.get_value<TempObject *>();
+
+            for (auto &entry : temp_object->m) {
+                ss << entry.first().c_str() << ": ";
+                dump_temp(entry.second(), ss);
+                ss << ", ";
+            }
+
+            ss << "}";
+        }
+    }
 
 #endif
+
+    void parse(nfcd_ConfigData **out_cd) {
+        _cd = *out_cd;
+
+        DEFERSTAT(*out_cd = _cd);
+
+        for (int i = 1; i < _ac; ++i) {
+            _arg_number = i;
+            _argument = _av[i];
+            _parse_current_argument();
+        };
+
+        nfcd_loc root_loc = _temp_to_nfcd(_root);
+        nfcd_set_root(_cd, root_loc);
+    }
+
+    // Grammar
+    // keyvalue: IDENTIFER ('.' IDENTIFER)* '='' Array | NUMBER | STRING
+    // Array: [NUMBER, NUMBER (, NUMBER, (NUMBER))]
+    void _parse_current_argument() {
+        scanner::init_from_cstring(_sc, _argument);
+
+        auto parse_key_return = parse_key();
+
+        if (_sc.current_tok != '=') {
+            error_message("Expected '=' after key", true);
+        }
+
+        scanner::next(_sc);
+
+        auto value = parse_value();
+
+#if 0
+        {
+            auto ss = stringify_nfcd(_cd, value);
+            LOG_F(INFO, "Value parsed = %s", fo_ss::c_str(ss));
+            LOG_F(INFO, "Key parsed = %s", parse_key_return.key.c_str());
+
+            // ss = stringify_nfcd(_cd, parse_key_return.last_containing_object);
+            // LOG_F(INFO, "Object to put in = %s", fo_ss::c_str(ss));
+        }
+
+#endif
+
+        fo::set(parse_key_return.last_containing_object->m, parse_key_return.key, value);
+
+        scanner::next(_sc);
+    }
+
+    nfcd_loc _temp_to_nfcd(const TempObject *root) {
+        // Convert the temp object to nfcd object
+
+        nfcd_loc object = nfcd_add_object(&_cd, fo::size(root->m));
+
+        for (const auto &e : root->m) {
+            const auto key = e.first();
+            const auto value = e.second();
+
+            if (value.contains_subtype<nfcd_loc>()) {
+                nfcd_set(&_cd, object, key.c_str(), value.get_value<nfcd_loc>());
+            } else {
+                nfcd_loc subobject = _temp_to_nfcd(value.get_value<TempObject *>());
+                nfcd_set(&_cd, object, key.c_str(), subobject);
+            }
+        }
+        { auto ss = stringify_nfcd(_cd, object); }
+
+        return object;
+    }
+
+    void error_message(std::string message, bool abort = false) {
+        int pos = _sc.token_start;
+        LOG_F(ERROR,
+              "Argument parse error %i, (: %s) - at position - %i. %s",
+              _arg_number,
+              _argument,
+              pos,
+              message.c_str());
+
+        if (abort) {
+            ABORT_F("See log.");
+        }
+    }
+
+    struct ParseKeyReturn {
+        std::string key;
+        TempObject *last_containing_object;
+    };
+
+    ParseKeyReturn parse_key() {
+        fo::TempAllocator1024 ta;
+
+        int token = scanner::next(_sc);
+
+        ParseKeyReturn ret;
+        ret.last_containing_object = _root;
+
+        if (token == scanner::IDENT) {
+            ret.key = scanner::token_text(_sc, ta);
+        } else {
+            error_message("Expected an identifier while parsing key", true);
+        }
+
+        while (scanner::next(_sc) == '.') {
+            // Make an object for the last sub name
+            // nfcd_loc child_object = nfcd_add_object(&_cd, 1);
+            //
+
+            // Check if already have the object
+            auto it = fo::get(ret.last_containing_object->m, ret.key);
+            TempObject *child_object = nullptr;
+
+            if (it == fo::end(ret.last_containing_object->m)) {
+                child_object = fo::make_new<TempObject>(fo::memory_globals::default_allocator());
+            } else {
+                auto existing = it->second();
+                if (existing.contains_subtype<nfcd_loc>()) {
+                    auto ss = stringify_nfcd(_cd, existing.get_value<nfcd_loc>());
+
+                    ABORT_F(
+                        "Key '%s' is non-object in one argument and object in another. Existing value = %s",
+                        ret.key.c_str(),
+                        fo_ss::c_str(ss));
+                }
+
+                child_object = existing.get_value<TempObject *>();
+            }
+
+            fo::set(ret.last_containing_object->m, ret.key, TempValue(child_object));
+            ret.last_containing_object = child_object;
+
+            scanner::next(_sc);
+
+            if (_sc.current_tok != scanner::IDENT) {
+                error_message("Expected an identifer in nested name after '.'", true);
+            }
+
+            char *str = scanner::token_text(_sc, ta);
+            ret.key = str;
+        }
+
+        return ret;
+    }
+
+    nfcd_loc add_number() {
+        if ((long)IntMaxMin<i32>::min > _sc.current_int || _sc.current_int > (long)IntMaxMin<i32>::max) {
+            error_message(fmt::format("Cannot represent integer - {} in signed 32-bit", _sc.current_int),
+                          true);
+        }
+
+        return nfcd_add_number(&_cd, (double)_sc.current_int);
+    };
+
+    TempValue parse_value() {
+        switch (_sc.current_tok) {
+        case scanner::INT: {
+            nfcd_loc loc = add_number();
+            scanner::next(_sc);
+            return TempValue(loc);
+
+        } break;
+
+        case scanner::FLOAT: {
+            nfcd_loc loc = nfcd_add_number(&_cd, _sc.current_float);
+            scanner::next(_sc);
+            return TempValue(loc);
+        } break;
+
+        case '[': {
+            scanner::next(_sc);
+
+            int index = 0;
+
+            std::vector<nfcd_loc> numbers;
+
+            while (_sc.current_tok != ']') {
+                if (_sc.current_tok == scanner::INVALID || scanner::EOFS) {
+                    error_message(fmt::format("Expected closing ']' for array found - {}",
+                                              scanner::desc(_sc.current_tok)),
+                                  true);
+                }
+
+                if (_sc.current_tok != scanner::INT || _sc.current_tok != scanner::FLOAT) {
+                    error_message(
+                        fmt::format("Expected a number while parsing {}-th element of array", index), true);
+                }
+
+                numbers.push_back(add_number());
+                scanner::next(_sc);
+            }
+
+            scanner::next(_sc);
+
+            nfcd_loc array = nfcd_add_array(&_cd, (int)numbers.size());
+            for (auto n : numbers) {
+                nfcd_push(&_cd, array, n);
+            }
+            return TempValue(array);
+
+        } break;
+
+        case scanner::STRING: {
+            fo::TempAllocator512 ta;
+            fo_ss::Buffer string(ta);
+            scanner::token_text(_sc, string);
+            fo_ss::Buffer unescaped(ta);
+            scanner::string_token(unescaped, string);
+            return TempValue(nfcd_add_string(&_cd, fo_ss::c_str(unescaped)));
+
+        } break;
+
+        default: {
+            error_message("Unexpected value", true);
+        }
+        }
+        return nfcd_null();
+    }
+};
+
+Error Storage::init_from_args(int ac, char **av, jsonvalidate::Validator *validator) {
+    _cd = nfcd_make(simple_nf_realloc, nullptr, 0, 0);
+
+    nfcd_loc root = nfcd_add_object(&_cd, ac);
+    nfcd_set_root(_cd, root);
+
+    ArgumentParser parser(ac, av);
+    parser.parse(&_cd);
+
+    if (validator) {
+        if (!validator->validate(_cd, nfcd_root(_cd), false)) {
+            return Error("Failed to validate arguments");
+        }
+    }
+
+    return Error::ok();
+}
 
 } // namespace inistorage
 
@@ -289,11 +553,13 @@ TU_LOCAL void recurse_object(nfcd_ConfigData *cd, fo::string_stream::Buffer &ss,
     }
 };
 
-fo::string_stream::Buffer stringify_nfcd(nfcd_ConfigData *cd, fo::string_stream::Buffer ss) {
+fo::string_stream::Buffer
+stringify_nfcd(nfcd_ConfigData *cd, nfcd_loc root_object, fo::string_stream::Buffer ss) {
     using namespace fo::string_stream;
 
-    auto root = nfcd_root(cd);
-    recurse_object(cd, ss, root);
+    root_object = nfcd_type(cd, root_object) == NFCD_TYPE_NULL ? nfcd_root(cd) : root_object;
+    recurse_object(cd, ss, root_object);
 
     return ss;
 }
+

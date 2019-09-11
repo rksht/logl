@@ -14,5 +14,11 @@ struct Error {
     // Just to make it clear, passing `nullptr` denotes "no error".
     static Error ok() { return Error(nullptr); }
 
-    operator bool() const { return fo::size(_ss) == 0; }
+    // True if there is an error.
+    operator bool() const { return fo::size(_ss) != 0; }
 };
+
+template <typename T> Error &operator<<(Error &error, T &value) {
+    using namespace fo::string_stream;
+    error._ss << value;
+}

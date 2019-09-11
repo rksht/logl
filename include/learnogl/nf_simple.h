@@ -77,6 +77,10 @@ inline constexpr const char *str_nfcd_type(int type) {
     };
 }
 
+namespace jsonvalidate {
+struct Validator; // Fwd
+}
+
 // Key-value kind of file parsing
 namespace inistorage {
 
@@ -95,14 +99,26 @@ struct Storage {
 
     Storage() = default;
 
-    // Constructor
+    // Ctor. Initializes from file
     Storage(const fs::path &path, bool keep_config_data = true);
 
-    // Initialize a storage object from a given file
+    // Dtor
+    ~Storage() {
+        if (_cd) {
+            nfcd_free(_cd);
+            _cd = nullptr;
+        }
+    }
+
+    // Same as ctor. But resets and initialize a storage object from a given file.
     void init_from_file(const fs::path &path, bool keep_config_data = true);
 
-    // Initialize a storage object from command line arguments
-    const char *init_from_args(int ac, char **av);
+    // Initialize a storage object from command line arguments. *All* command line arguments are of the form-
+    // `key=value`. Keys are always qualified names. `grid.num_x_cells=100` tells you that there is a `grid`
+    // object inside root and it contains a key `num_x_cells`. Values that look like numbers are going to be
+    // parsed as numbers, and those that look like strings are going to parsed as strings. Arrays can only be
+    // vectors{2,3,4}.
+    Error init_from_args(int ac, char **av, jsonvalidate::Validator *validator = nullptr);
 
     nfcd_ConfigData *cd() const { return _cd; }
 
@@ -205,7 +221,8 @@ struct Storage {
 } // namespace inistorage
 
 // nfcd_ConfigData to JSON string.
-fo::string_stream::Buffer stringify_nfcd(nfcd_ConfigData *cd, fo::string_stream::Buffer ss = {});
+fo::string_stream::Buffer
+stringify_nfcd(nfcd_ConfigData *cd, nfcd_loc root_object = nfcd_null(), fo::string_stream::Buffer ss = {});
 
 // Functions for parsing some frequently used data types
 
@@ -322,6 +339,8 @@ struct Object : Validator {
                 }
             }
         }
+
+        return true;
     }
 };
 

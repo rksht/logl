@@ -6,12 +6,14 @@
 using namespace fo;
 
 Error::Error(const char *error_string)
-    : _ss(fo::default_scratch_allocator()) {
+    : _ss(memory_globals::default_allocator()) {
     if (error_string && strlen(error_string) == 0) {
         ABORT_F("Empty message given empty string. If you want to denote no error just default initialize");
     }
 
-    string_stream::printf(_ss, "%s", error_string);
+    if (error_string) {
+        string_stream::printf(_ss, "%s", error_string);
+    }
 }
 
 const char *Error::to_string() const {
