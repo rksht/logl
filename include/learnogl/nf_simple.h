@@ -120,6 +120,8 @@ struct Storage {
     // vectors{2,3,4}.
     Error init_from_args(int ac, char **av, jsonvalidate::Validator *validator = nullptr);
 
+    void merge(const Storage &other);
+
     nfcd_ConfigData *cd() const { return _cd; }
 
     bool is_empty() const { return _map.size() == 0; }

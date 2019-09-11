@@ -191,6 +191,12 @@ void Storage::init_from_file(const fs::path &path, bool keep_config_data) {
     _initialized = true;
 }
 
+void Storage::merge(const Storage &other) {
+    for (auto &e : other._map) {
+        _map[e.first] = e.second;
+    }
+}
+
 struct ArgumentParser {
     fo::TempAllocator<1024> _temp_object_allocator;
     scanner::Scanner _sc;

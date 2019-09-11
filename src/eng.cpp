@@ -318,6 +318,18 @@ void start_gl(const StartGLParams &params, GLApp &gl_app) {
     inistorage::Storage config_ini;
     load_app_config(config_ini);
 
+    if (params.ac != 0) {
+        CHECK_NE_F(params.av, nullptr);
+
+        inistorage::Storage cmdline_ini;
+        Error err = cmdline_ini.init_from_args(params.ac, params.av);
+        if (err) {
+            ABORT_F("%s", err.to_string());
+        }
+
+        config_ini.merge(cmdline_ini);
+    }
+
     u32 scene_node_pool_size = 0;
     INI_STORE_DEFAULT("scene_node_pool_size", config_ini.boolean, scene_node_pool_size, 100);
 
