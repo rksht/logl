@@ -227,7 +227,7 @@ struct ArgumentParser {
                 _delete_temp_object(mapped_value.get_value<TempObject *>());
             }
         }
-        root->~TempObject();
+        fo::make_delete(_temp_object_allocator, root);
     }
 
     ArgumentParser(int ac, char **av)
@@ -377,7 +377,7 @@ struct ArgumentParser {
             TempObject *child_object = nullptr;
 
             if (it == fo::end(ret.last_containing_object->m)) {
-                child_object = fo::make_new<TempObject>(fo::memory_globals::default_allocator());
+                child_object = fo::make_new<TempObject>(_temp_object_allocator);
             } else {
                 auto existing = it->second();
                 if (existing.contains_subtype<nfcd_loc>()) {
@@ -475,9 +475,7 @@ struct ArgumentParser {
 
         } break;
 
-        default: {
-            error_message("Unexpected value", true);
-        }
+        default: { error_message("Unexpected value", true); }
         }
         return nfcd_null();
     }
@@ -568,4 +566,3 @@ stringify_nfcd(nfcd_ConfigData *cd, nfcd_loc root_object, fo::string_stream::Buf
 
     return ss;
 }
-
